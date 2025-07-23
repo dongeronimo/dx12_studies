@@ -1,0 +1,207 @@
+{
+  "$schema": "https://raw.githubusercontent.com/spdx/spdx-spec/v2.2.1/schemas/spdx-schema.json",
+  "spdxVersion": "SPDX-2.2",
+  "dataLicense": "CC0-1.0",
+  "SPDXID": "SPDXRef-DOCUMENT",
+  "documentNamespace": "https://spdx.org/spdxdocs/directxtex-x64-windows-jan2021b-facf1dd5-bd6c-4dd5-8cbc-62439343a446",
+  "name": "directxtex:x64-windows@jan2021b 01d1dd4846f900d1eca561db4bdc752cc74618ea6cb6d42e46c9eabb1921ff00",
+  "creationInfo": {
+    "creators": [
+      "Tool: vcpkg-2025-02-11-bec4296bf5289dc9ce83b4f5095943e44162f9c2"
+    ],
+    "created": "2025-07-18T20:36:01Z"
+  },
+  "relationships": [
+    {
+      "spdxElementId": "SPDXRef-port",
+      "relationshipType": "GENERATES",
+      "relatedSpdxElement": "SPDXRef-binary"
+    },
+    {
+      "spdxElementId": "SPDXRef-port",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-file-0"
+    },
+    {
+      "spdxElementId": "SPDXRef-port",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-file-1"
+    },
+    {
+      "spdxElementId": "SPDXRef-port",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-file-2"
+    },
+    {
+      "spdxElementId": "SPDXRef-binary",
+      "relationshipType": "GENERATED_FROM",
+      "relatedSpdxElement": "SPDXRef-port"
+    },
+    {
+      "spdxElementId": "SPDXRef-file-0",
+      "relationshipType": "CONTAINED_BY",
+      "relatedSpdxElement": "SPDXRef-port"
+    },
+    {
+      "spdxElementId": "SPDXRef-file-1",
+      "relationshipType": "CONTAINED_BY",
+      "relatedSpdxElement": "SPDXRef-port"
+    },
+    {
+      "spdxElementId": "SPDXRef-file-2",
+      "relationshipType": "CONTAINED_BY",
+      "relatedSpdxElement": "SPDXRef-port"
+    }
+  ],
+  "packages": [
+    {
+      "name": "directxtex",
+      "SPDXID": "SPDXRef-port",
+      "versionInfo": "jan2021b",
+      "downloadLocation": "git+https://github.com/Microsoft/vcpkg@ddb9174d08513e8ad6a9ffc4cedc024fc1b6f68d",
+      "homepage": "https://walbourn.github.io/directxtex",
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "NOASSERTION",
+      "copyrightText": "NOASSERTION",
+      "description": "DirectXTex texture processing library",
+      "comment": "This is the port (recipe) consumed by vcpkg."
+    },
+    {
+      "name": "directxtex:x64-windows",
+      "SPDXID": "SPDXRef-binary",
+      "versionInfo": "01d1dd4846f900d1eca561db4bdc752cc74618ea6cb6d42e46c9eabb1921ff00",
+      "downloadLocation": "NONE",
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "NOASSERTION",
+      "copyrightText": "NOASSERTION",
+      "comment": "This is a binary package built by vcpkg."
+    },
+    {
+      "SPDXID": "SPDXRef-resource-0",
+      "name": "Microsoft/DirectXTex",
+      "downloadLocation": "git+https://github.com/Microsoft/DirectXTex@jan2021b",
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "NOASSERTION",
+      "copyrightText": "NOASSERTION",
+      "checksums": [
+        {
+          "algorithm": "SHA512",
+          "checksumValue": "bd327d0629bbae199f1b3fd80c0470b15edf221f204a4958b4e47b2b1a155b5c0e0af1cc1c39229d582363798f82efa91a3f63ec118fdb0e9255098a576b98ef"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-resource-1",
+      "name": "DirectXTexEXR.h",
+      "packageFileName": "DirectXTexEXR.h",
+      "downloadLocation": "https://raw.githubusercontent.com/wiki/Microsoft/DirectXTex/DirectXTexEXR.h",
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "NOASSERTION",
+      "copyrightText": "NOASSERTION",
+      "checksums": [
+        {
+          "algorithm": "SHA512",
+          "checksumValue": "94ec71069949c8daa616d241ade0c771c448adab3e401a935d5462e7cac382cfbef47534072fc4b9706e086f5021de78a51fd4e2a6850cd3629c932592f9a168"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-resource-2",
+      "name": "DirectXTexEXR-1.cpp",
+      "packageFileName": "DirectXTexEXR-1.cpp",
+      "downloadLocation": "https://raw.githubusercontent.com/wiki/Microsoft/DirectXTex/DirectXTexEXR.cpp",
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "NOASSERTION",
+      "copyrightText": "NOASSERTION",
+      "checksums": [
+        {
+          "algorithm": "SHA512",
+          "checksumValue": "770fc0325b49139079b0bceb50619f93887e87a3dcf264b10dc01be16209fa51ba03d8273d4d4f84e596ac014376db96b7fed0afabe08c32394ed92495168ea6"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-resource-3",
+      "name": "texassemble-jan2021.exe",
+      "packageFileName": "texassemble-jan2021.exe",
+      "downloadLocation": "https://github.com/Microsoft/DirectXTex/releases/download/jan2021/texassemble.exe",
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "NOASSERTION",
+      "copyrightText": "NOASSERTION",
+      "checksums": [
+        {
+          "algorithm": "SHA512",
+          "checksumValue": "0def8873358234ea4cd16acd59cb1dda2a8ad132f362502d643caed43e9aef19f9c7e7248494093cbd61e7501a9b44f545d3fbd5f50972ebcee3d01598a7c3b7"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-resource-4",
+      "name": "texconv-jan2021.exe",
+      "packageFileName": "texconv-jan2021.exe",
+      "downloadLocation": "https://github.com/Microsoft/DirectXTex/releases/download/jan2021/texconv.exe",
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "NOASSERTION",
+      "copyrightText": "NOASSERTION",
+      "checksums": [
+        {
+          "algorithm": "SHA512",
+          "checksumValue": "77559db65406ad0343901ff22f7647c4f270674f7b0c31b12d8dc26c718f410708ebe95bdc0ddba4049fa6cefd52ff856174530fc4170f9e725b30aacb78249c"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-resource-5",
+      "name": "texdiag-jan2021.exe",
+      "packageFileName": "texdiag-jan2021.exe",
+      "downloadLocation": "https://github.com/Microsoft/DirectXTex/releases/download/jan2021/texdiag.exe",
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "NOASSERTION",
+      "copyrightText": "NOASSERTION",
+      "checksums": [
+        {
+          "algorithm": "SHA512",
+          "checksumValue": "1b9e733050b5f92af86a9a2f415205acbff62f0708e491a3846d7b6e480a9c57086eff636be163d42a40a6d34dafc622cc53940797e7f6f77e739f3a66365f57"
+        }
+      ]
+    }
+  ],
+  "files": [
+    {
+      "fileName": "./C:/vcpkg/buildtrees/versioning_/versions/directxtex/ddb9174d08513e8ad6a9ffc4cedc024fc1b6f68d/CONTROL",
+      "SPDXID": "SPDXRef-file-0",
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "4dfca6980359dc44c76378b1a2499e55099b05f851fcc960eab0e8abd0f7b67e"
+        }
+      ],
+      "licenseConcluded": "NOASSERTION",
+      "copyrightText": "NOASSERTION"
+    },
+    {
+      "fileName": "./C:/vcpkg/buildtrees/versioning_/versions/directxtex/ddb9174d08513e8ad6a9ffc4cedc024fc1b6f68d/enable_openexr_support.patch",
+      "SPDXID": "SPDXRef-file-1",
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "f42c5a49d763969557226841104cc04104e7c3068c2b8fc82f561fbfe1aa55a6"
+        }
+      ],
+      "licenseConcluded": "NOASSERTION",
+      "copyrightText": "NOASSERTION"
+    },
+    {
+      "fileName": "./C:/vcpkg/buildtrees/versioning_/versions/directxtex/ddb9174d08513e8ad6a9ffc4cedc024fc1b6f68d/portfile.cmake",
+      "SPDXID": "SPDXRef-file-2",
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "1f700c0ec1948643719c05834f88d18eafa550049c576002104cd972ef23fbeb"
+        }
+      ],
+      "licenseConcluded": "NOASSERTION",
+      "copyrightText": "NOASSERTION"
+    }
+  ]
+}

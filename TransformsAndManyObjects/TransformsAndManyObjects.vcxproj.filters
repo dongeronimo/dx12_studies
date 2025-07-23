@@ -1,0 +1,184 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="Header Files\imgui_headers">
+      <UniqueIdentifier>{0e05da22-a6a3-496d-990b-e45500b08639}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\imgui_src">
+      <UniqueIdentifier>{52ba2ca6-4c2e-4c5b-80e6-bb6f3c977f47}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="TransformsAndManyObjects.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="direct3d_context.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="pipeline.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="view_projection.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="model_matrix.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="components.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="script_runner_system.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="on_esc_handler.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="camera_input_handler.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="shared_descriptor_heap_v2.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="game_window.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\imgui-1.92.1\imgui.cpp">
+      <Filter>Source Files\imgui_src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\imgui-1.92.1\imgui_demo.cpp">
+      <Filter>Source Files\imgui_src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\imgui-1.92.1\imgui_draw.cpp">
+      <Filter>Source Files\imgui_src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\imgui-1.92.1\backends\imgui_impl_dx12.cpp">
+      <Filter>Source Files\imgui_src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\imgui-1.92.1\backends\imgui_impl_win32.cpp">
+      <Filter>Source Files\imgui_src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\imgui-1.92.1\misc\cpp\imgui_stdlib.cpp">
+      <Filter>Source Files\imgui_src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\imgui-1.92.1\imgui_tables.cpp">
+      <Filter>Source Files\imgui_src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\imgui-1.92.1\imgui_widgets.cpp">
+      <Filter>Source Files\imgui_src</Filter>
+    </ClCompile>
+    <ClCompile Include="my_imgui_manager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="offscreen_render_target.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="pch.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="direct3d_context.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="pipeline.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="view_projection.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="model_matrix.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="transform.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="components.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="per_object_uniform_buffer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="per_object_data.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="script_runner_system.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="per_frame_data_for_simple_lighting.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="per_frame_data_for_unlit_debug.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="lighting_data.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="on_esc_handler.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="camera_input_handler.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="shared_descriptor_heap_v2.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="game_window.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\imgui-1.92.1\imconfig.h">
+      <Filter>Header Files\imgui_headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\imgui-1.92.1\imgui.h">
+      <Filter>Header Files\imgui_headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\imgui-1.92.1\backends\imgui_impl_dx12.h">
+      <Filter>Header Files\imgui_headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\imgui-1.92.1\backends\imgui_impl_win32.h">
+      <Filter>Header Files\imgui_headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\imgui-1.92.1\imgui_internal.h">
+      <Filter>Header Files\imgui_headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\imgui-1.92.1\misc\cpp\imgui_stdlib.h">
+      <Filter>Header Files\imgui_headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\imgui-1.92.1\imstb_rectpack.h">
+      <Filter>Header Files\imgui_headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\imgui-1.92.1\imstb_textedit.h">
+      <Filter>Header Files\imgui_headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\imgui-1.92.1\imstb_truetype.h">
+      <Filter>Header Files\imgui_headers</Filter>
+    </ClInclude>
+    <ClInclude Include="my_imgui_manager.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="offscreen_render_target.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="transforms_vertex_shader.hlsl" />
+    <FxCompile Include="transforms_pixel_shader.hlsl" />
+    <FxCompile Include="simple_lighting_vs.hlsl" />
+    <FxCompile Include="simple_lighting_ps.hlsl" />
+    <FxCompile Include="scene_offscreen_presentation_vs.hlsl" />
+    <FxCompile Include="scene_offscreen_presentation_ps.hlsl" />
+    <FxCompile Include="bsdf_vs.hlsl" />
+    <FxCompile Include="bsdf_ps.hlsl" />
+  </ItemGroup>
+</Project>

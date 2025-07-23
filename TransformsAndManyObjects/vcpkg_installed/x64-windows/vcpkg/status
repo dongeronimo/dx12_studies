@@ -1,0 +1,8 @@
+Package: directxtex
+Version: jan2021b
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 01d1dd4846f900d1eca561db4bdc752cc74618ea6cb6d42e46c9eabb1921ff00
+Description: DirectXTex texture processing library
+Status: install ok installed
+

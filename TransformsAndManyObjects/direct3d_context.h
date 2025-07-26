@@ -38,6 +38,7 @@ namespace transforms
         std::vector<Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>> dsDescriptorHeap; 
     
         Microsoft::WRL::ComPtr<ID3D12PipelineState> fullscreenQuadPSO;
+        Microsoft::WRL::ComPtr<ID3D12PipelineState> shadowMapPSO;
     public:
         Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> ResetFrame();
         Microsoft::WRL::ComPtr<ID3D12PipelineState> GetFullscreenQuadPSO() { return fullscreenQuadPSO; }
@@ -50,9 +51,11 @@ namespace transforms
         Microsoft::WRL::ComPtr<ID3D12RootSignature> CreateUnlitDebugRootSignature(const std::wstring& name);
         Microsoft::WRL::ComPtr<ID3D12RootSignature> CreateSimpleLightingRootSignature(const std::wstring& name);
         Microsoft::WRL::ComPtr<ID3D12RootSignature> CreateQuadRenderRootSignature();
+        Microsoft::WRL::ComPtr<ID3D12RootSignature> CreateShadowMapRootSignature();
         Microsoft::WRL::ComPtr<ID3D12Device> GetDevice()const {
             return device;
         }
+        void CreateShadowMapPipeline(ID3D12RootSignature* rootSig);
         void CreateFullscreenQuadPipeline(ID3D12RootSignature* rootSig);
         void CreateStagingAndGPUBuffer(size_t size,
             Microsoft::WRL::ComPtr<ID3D12Resource>& _gpuBuffer,

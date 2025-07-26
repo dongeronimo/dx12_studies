@@ -29,6 +29,7 @@ namespace transforms
         struct PointLight {
             // The light's intensity at a distance 'd' from the source is inversely proportional to 
             // 
+            std::wstring name;
             float attenuationConstant;
             float attenuationLinear;
             float attenuationQuadratic;

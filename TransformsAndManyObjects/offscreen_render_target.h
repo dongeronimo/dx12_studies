@@ -3,11 +3,12 @@
 namespace transforms {
     class Context;
     class SharedDescriptorHeapV2;
+    class RtvDsvDescriptorHeapManager;
     class OffscreenRenderTarget
     {
     public:
         OffscreenRenderTarget(int w, int h, Context* ctx,
-            SharedDescriptorHeapV2* descriptorHeap);
+            SharedDescriptorHeapV2* descriptorHeap, RtvDsvDescriptorHeapManager* rtvDsvHeap);
         void SetAsRenderTarget(ID3D12GraphicsCommandList* commandList, int frameIndex);
         void Clear(ID3D12GraphicsCommandList* commandList, int frameIndex, std::array<float,4> clearColor);
         void TransitionToRenderTarget(ID3D12GraphicsCommandList* commandList, int frameIndex);

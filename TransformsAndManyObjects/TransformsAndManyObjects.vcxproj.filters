@@ -84,6 +84,9 @@
     <ClCompile Include="offscreen_render_target.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="cube_map_shadow_map.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h">
@@ -170,6 +173,12 @@
     <ClInclude Include="offscreen_render_target.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="rtv_dsv_shared_heap.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="cube_map_shadow_map.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="transforms_vertex_shader.hlsl" />
@@ -180,5 +189,7 @@
     <FxCompile Include="scene_offscreen_presentation_ps.hlsl" />
     <FxCompile Include="bsdf_vs.hlsl" />
     <FxCompile Include="bsdf_ps.hlsl" />
+    <FxCompile Include="shadow_map_vs.hlsl" />
+    <FxCompile Include="shadow_map_ps.hlsl" />
   </ItemGroup>
 </Project>

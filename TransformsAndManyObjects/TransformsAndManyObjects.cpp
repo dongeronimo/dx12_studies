@@ -28,6 +28,8 @@
 #include "my_imgui_manager.h"
 #include "game_window.h"
 #include "offscreen_render_target.h"
+#include "rtv_dsv_shared_heap.h"
+#include "cube_map_shadow_map.h"
 using Microsoft::WRL::ComPtr;
 
 constexpr int W = 1024;
@@ -51,11 +53,14 @@ std::unique_ptr<transforms::UniformBufferForSRVs<PerFrameDataForUnlitDebug>> gPe
 std::unique_ptr<transforms::UniformBufferForSRVs<PerFrameDataForSimpleLighting>> gPerFrameSimpleLightingUniformBuffer = nullptr;
 std::unique_ptr<transforms::UniformBufferForSRVs<LightingData>> gLightingDataUniformBuffer = nullptr;
 std::unique_ptr<transforms::MyImguiManager> gImguiManager = nullptr;
+std::unique_ptr<transforms::RtvDsvDescriptorHeapManager> gRtvDsvSharedHeap = nullptr;
+std::unique_ptr<transforms::ShadowMapConstantBuffer> gShadowMapConstantBuffer = nullptr;
 transforms::Window* gWindow = nullptr;
 
 const std::wstring unlitDebugRootSignature = L"unlit debug";
 const std::wstring simpleLightingRootSignature = L"simple lighting";
 const std::wstring quadRenderRootSignature = L"QuadRenderRootSignature";
+const std::wstring shadowMapRootSignature = L"ShadowMapRootSignature";
 
 void CreateRootSignatures(transforms::RootSignatureService* rootSignatureService, transforms::Context* ctx);
 void LoadMeshes(transforms::Context* ctx);
@@ -75,10 +80,11 @@ int main()
 	std::unique_ptr<transforms::RootSignatureService> rootSignatureService = std::make_unique<transforms::RootSignatureService>();
 	CreateRootSignatures(rootSignatureService.get(), ctx.get());
 	CreatePipelines(rootSignatureService.get(), ctx.get());
-	//create the shared heap
-	//TODO PBR: Define the data struct for transfer of pbr data. (DONE)
-	//TODO PBR: Create the descriptors for the pbr material. 
+	//create the shared heaps
 	gSharedDescriptors = std::make_unique<transforms::SharedDescriptorHeapV2>(ctx->GetDevice().Get(), 1000);
+	gRtvDsvSharedHeap = std::make_unique<transforms::RtvDsvDescriptorHeapManager>();
+	gRtvDsvSharedHeap->Initialize(ctx->GetDevice().Get(), 1024, 1024);
+
 	gPerObjectUniformBuffer = std::make_unique<transforms::UniformBufferForSRVs<transforms::PerObjectData>>(*ctx, 
 		gSharedDescriptors.get(), 0, 10000); 
 	gPerFrameUnlitDebugUniformBuffer = std::make_unique<transforms::UniformBufferForSRVs<PerFrameDataForUnlitDebug>>(*ctx, 
@@ -87,7 +93,8 @@ int main()
 		gSharedDescriptors.get(), 2, 1);
 	gLightingDataUniformBuffer = std::make_unique<transforms::UniformBufferForSRVs<LightingData>>(*ctx, 
 		gSharedDescriptors.get(), 3, 100);
-
+	gShadowMapConstantBuffer = std::make_unique<transforms::ShadowMapConstantBuffer>();
+	gShadowMapConstantBuffer->Initialize(ctx->GetDevice().Get());
 	// Fill out the Viewport
 	SetViewportAndScissors(unlitDebugPipeline, W, H);
 	SetViewportAndScissors(BSDFPipeline, W, H);
@@ -96,7 +103,6 @@ int main()
 	//TODO lighting: create an entity to get keyboard event to switch between unlit debug and simple lighting;
 	/////////////Add a camera to the scene/////////////
 	entt::entity mainCamera = gRegistry.create();
-	//0) the camera
 	transforms::components::Transform cameraTransform;
 	cameraTransform.position = DirectX::XMFLOAT3(-6, 21.f, -12);
 	cameraTransform.LookAt(DirectX::XMFLOAT3(-6, 0.f, 0));
@@ -107,9 +113,16 @@ int main()
 	cameraPerspective.zFar = 100.f;
 	gRegistry.emplace<transforms::components::Transform>(mainCamera, cameraTransform);
 	gRegistry.emplace<transforms::components::Perspective>(mainCamera, cameraPerspective);
-
 	gRegistry.emplace<transforms::components::tags::MainCamera>(mainCamera, transforms::components::tags::MainCamera{});
 	transforms::components::CreateCameraInputHandler(gWindow, gRegistry, mainCamera);
+	//add shadow map components to the lights
+	gRegistry.view<transforms::components::PointLight, transforms::components::Transform>()
+		.each([&ctx](entt::entity e, transforms::components::PointLight& pt, transforms::components::Transform& t) {
+		auto shadowMap = std::make_shared<transforms::CubeMapShadowMap>(pt.name);
+		shadowMap->Initialize(ctx->GetDevice().Get(), gRtvDsvSharedHeap.get(),gSharedDescriptors.get(), 1024);
+		gRegistry.emplace<std::shared_ptr<transforms::CubeMapShadowMap>>(e, shadowMap);
+	});
+
 	//handle window resizing
 	window.mOnResize = [ &ctx](int newW, int newH) {
 		//TODO RESIZE: Resize is freezing the app
@@ -121,12 +134,12 @@ int main()
 	};
 	common::DeltaTimer deltaTimer;
 	std::shared_ptr<transforms::OffscreenRenderTarget> mainRenderPassTarget = std::make_shared<transforms::OffscreenRenderTarget>(W,
-		H, ctx.get(), gSharedDescriptors.get());
+		H, ctx.get(), gSharedDescriptors.get(), gRtvDsvSharedHeap.get());
 	gImguiManager = std::make_unique<transforms::MyImguiManager>(gWindow->Hwnd(), ctx->GetDevice().Get(),
 		ctx->GetCommandQueue().Get(), gSharedDescriptors.get());
-	float exposure = 0.010f;
+	float exposure = 0.002f;
 
-	//set onIdle handle to deal with rewndering
+	//set onIdle handle to deal with rendering
 	window.mOnIdle = [&ctx, &exposure, &rootSignatureService, &deltaTimer, &mainRenderPassTarget]() {
 		const float deltaTime = deltaTimer.GetDelta();
 		//A rudimentary animation to test the transform
@@ -135,10 +148,7 @@ int main()
 		transforms::components::UpdateAllTransforms(gRegistry);
 		//wait until i can interact with this frame again
 		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList = ctx->ResetFrame();
-		
-		mainRenderPassTarget->TransitionToRenderTarget(commandList.Get(), ctx->GetFrameIndex());
-		mainRenderPassTarget->SetAsRenderTarget(commandList.Get(), ctx->GetFrameIndex());
- 		mainRenderPassTarget->Clear(commandList.Get(), ctx->GetFrameIndex(), {0.0f, 0,0,1});
+
 		//TODO PBR: Change the selection (DONE)
 		//Update the per-object uniform buffer
 		auto renderables = gRegistry.view<transforms::components::Renderable, transforms::components::Transform, BSDFMaterial_t>();
@@ -148,7 +158,7 @@ int main()
 			const BSDFMaterial_t mat) {
 				//TODO PBR: transfer PBR data
 				transforms::PerObjectData pod{};
-				pod.modelMatrix = DirectX::XMMatrixTranspose( transform.worldMatrix );
+				pod.modelMatrix = DirectX::XMMatrixTranspose(transform.worldMatrix);
 				pod.inverseTransposeModelMat = DirectX::XMMatrixInverse(nullptr, transform.worldMatrix);
 
 				pod.baseColor = DirectX::XMLoadFloat4(&mat->baseColor);
@@ -158,7 +168,7 @@ int main()
 				pod.refracti = mat->refracti;
 				pod.emissiveColor = DirectX::XMVectorSet(mat->emissiveColor.x, mat->emissiveColor.y, mat->emissiveColor.z, 1);
 
-				gPerObjectUniformBuffer->SetValue(ctx->GetFrameIndex(), 
+				gPerObjectUniformBuffer->SetValue(ctx->GetFrameIndex(),
 					renderable.uniformBufferId, pod);
 			});
 		gPerObjectUniformBuffer->CopyToGPU(ctx->GetFrameIndex(), commandList.Get());
@@ -180,23 +190,23 @@ int main()
 			ld.position.w = 0;
 			gLightingDataUniformBuffer->SetValue(ctx->GetFrameIndex(), numLights, ld);
 			numLights++;
-		});
+			});
 		gLightingDataUniformBuffer->CopyToGPU(ctx->GetFrameIndex(), commandList.Get());
-		
+
 		auto mainCameraView = gRegistry.view<transforms::components::Transform,
 			transforms::components::Perspective,
 			transforms::components::tags::MainCamera>();
-		mainCameraView.each([&exposure, numLights,&ctx, &commandList](auto entity, transforms::components::Transform transform, auto perspective) {
+		mainCameraView.each([&exposure, numLights, &ctx, &commandList](auto entity, transforms::components::Transform transform, auto perspective) {
 			//For now i assume that there's only one camera that matters, the one with the MainCamera tag.
 			using namespace DirectX;
-			XMMATRIX viewMatrix = XMMatrixInverse(nullptr,transform.worldMatrix);
+			XMMATRIX viewMatrix = XMMatrixInverse(nullptr, transform.worldMatrix);
 			XMMATRIX projectionMatrix = XMMatrixPerspectiveFovLH(XMConvertToRadians(perspective.fovDegrees), perspective.ratio, perspective.zNear, perspective.zFar);
 			DirectX::XMMATRIX viewProjectionMatrix = XMMatrixTranspose(XMMatrixMultiply(viewMatrix, projectionMatrix));
-			
+
 			PerFrameDataForUnlitDebug pfd{ viewProjectionMatrix };
 			gPerFrameUnlitDebugUniformBuffer->SetValue(ctx->GetFrameIndex(), 0, pfd);
 			gPerFrameUnlitDebugUniformBuffer->CopyToGPU(ctx->GetFrameIndex(), commandList.Get());
-			
+
 			PerFrameDataForSimpleLighting _sl;
 			_sl.cameraPosition = transform.GetWorldPosition();
 			_sl.projMatrix = DirectX::XMMatrixTranspose(projectionMatrix);
@@ -206,8 +216,19 @@ int main()
 			_sl.exposure.x = exposure;
 			gPerFrameSimpleLightingUniformBuffer->SetValue(ctx->GetFrameIndex(), 0, _sl);
 			gPerFrameSimpleLightingUniformBuffer->CopyToGPU(ctx->GetFrameIndex(), commandList.Get());
-		});
+			});
 		
+		auto shadowProjectors = gRegistry.view<transforms::components::Transform, transforms::components::PointLight, std::shared_ptr<transforms::CubeMapShadowMap>>(); //list of shadow projectors
+		shadowProjectors.each([](entt::entity e, transforms::components::Transform& t, transforms::components::PointLight& pl, std::shared_ptr<transforms::CubeMapShadowMap> sm) {
+			//TODO SHADOWS:
+			//Set the cube map as target.
+			//Set up the position of the current shadow map.
+			//then draw the scene from this position 6 times to fill the cube map
+		});
+		mainRenderPassTarget->TransitionToRenderTarget(commandList.Get(), ctx->GetFrameIndex());
+		mainRenderPassTarget->SetAsRenderTarget(commandList.Get(), ctx->GetFrameIndex());
+		mainRenderPassTarget->Clear(commandList.Get(), ctx->GetFrameIndex(), { 0.0f, 0,0,1 });
+
 		//Bind the root descriptor
 		commandList->SetGraphicsRootSignature(rootSignatureService->Get(simpleLightingRootSignature).Get());
 		//Bind the "descriptor sets"
@@ -215,7 +236,7 @@ int main()
 		commandList->SetDescriptorHeaps(_countof(heaps), heaps);
 		// Bind descriptor tables
 		// Root parameter 0: per-object data SRV (t0)
-		commandList->SetGraphicsRootDescriptorTable(0, 
+		commandList->SetGraphicsRootDescriptorTable(0,
 			gPerObjectUniformBuffer->GetGPUHandle(ctx->GetFrameIndex()));
 		//TODO PBR: Bind the pbr buffer
 		//lighting: bind the light buffer	
@@ -233,19 +254,19 @@ int main()
 			const transforms::components::Renderable& renderable,
 			const transforms::components::Transform& transform,
 			const BSDFMaterial_t material)
-		{
-			ctx->GetCommandList()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-			ctx->GetCommandList()->IASetVertexBuffers(0, 1, &renderable.mVertexBufferView);
-			ctx->GetCommandList()->IASetIndexBuffer(&renderable.mIndexBufferView);
-			ctx->GetCommandList()->SetGraphicsRoot32BitConstant(1, renderable.uniformBufferId, 0);
-			ctx->GetCommandList()->DrawIndexedInstanced(
-				renderable.mNumberOfIndices,     // number of indices
-				1,              // instance count
-				0,              // start index
-				0,              // base vertex
-				0               // start instance
-			);
-		});
+			{
+				ctx->GetCommandList()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+				ctx->GetCommandList()->IASetVertexBuffers(0, 1, &renderable.mVertexBufferView);
+				ctx->GetCommandList()->IASetIndexBuffer(&renderable.mIndexBufferView);
+				ctx->GetCommandList()->SetGraphicsRoot32BitConstant(1, renderable.uniformBufferId, 0);
+				ctx->GetCommandList()->DrawIndexedInstanced(
+					renderable.mNumberOfIndices,     // number of indices
+					1,              // instance count
+					0,              // start index
+					0,              // base vertex
+					0               // start instance
+				);
+			});
 
 
 		///The main render pass is finished. We get the offscreen texture that was used as target and draw it 
@@ -276,8 +297,8 @@ int main()
 		//now that we drew everything, transition the rtv to presentation
 		ctx->TransitionCurrentRenderTarget(D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
 		//Submit the commands and present
-		ctx->Present();  
- 		};
+		ctx->Present();
+		};
 	//fire main loop
 	window.MainLoop();
 	ctx->WaitForPreviousFrame();
@@ -377,40 +398,18 @@ entt::entity ProcessNode(aiNode* node, const aiScene* scene,
 		auto material = materials[currMesh->mMaterialIndex];
 		gRegistry.emplace<BSDFMaterial_t>(e, material);
 	}
-	//TODO Deprecated: obsolete with the pbr materials, delete it.
-	//if (name.find("Wall") != std::string::npos) {
-	//	transforms::components::PhongMaterial mat{};
-	//	mat.ambientColor = DirectX::XMFLOAT4(0.1f, 0.1f, 0.1f, 0);
-	//	mat.emissiveColor = DirectX::XMFLOAT4(0, 0, 0, 0);
-	//	mat.diffuseColor = DirectX::XMFLOAT4(0.8f, 0.6f, 0.2f, 1.0f);
-	//	mat.shininess = 32.f;
-	//	mat.specularColor = DirectX::XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
-	//	gRegistry.emplace<PhongMaterial>(e, mat);
-	//}
-	//if (name.find("pillar") != std::string::npos) {
-	//	transforms::components::PhongMaterial mat{};
-	//	mat.ambientColor = DirectX::XMFLOAT4(0.1f, 0.1f, 0.1f, 0);
-	//	mat.emissiveColor = DirectX::XMFLOAT4(0, 0, 0, 0);
-	//	mat.diffuseColor = DirectX::XMFLOAT4(0.8f, 0.6f, 0.2f, 1.0f);
-	//	mat.shininess = 32.f;
-	//	mat.specularColor = DirectX::XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
-	//	gRegistry.emplace<PhongMaterial>(e, mat);
-	//}
-	//if (name.find("Floor") != std::	string::npos) {
-	//	transforms::components::PhongMaterial mat{};
-	//	mat.ambientColor = DirectX::XMFLOAT4(0.1f, 0.1f, 0.1f, 0);
-	//	mat.emissiveColor = DirectX::XMFLOAT4(0, 0, 0, 0);
-	//	mat.diffuseColor = DirectX::XMFLOAT4(0.8f, 0.6f, 0.2f, 1.0f);
-	//	mat.shininess = 32.f;
-	//	mat.specularColor = DirectX::XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
-	//	gRegistry.emplace<PhongMaterial>(e, mat);
-	//}
+
 	//lighting: Get the lights
 	for (unsigned int i = 0; i < scene->mNumLights; ++i) {
 		aiLight* light = scene->mLights[i];
 		if (strcmp(light->mName.C_Str(), node->mName.C_Str()) == 0) {
 			//I assume one light per node.
-			transforms::components::PointLight pl{};
+			transforms::components::PointLight pl{}; 
+			
+			std::string str(light->mName.C_Str());
+			std::wstring wstr(str.begin(), str.end());
+			
+			pl.name = wstr;
 			pl.attenuationConstant = light->mAttenuationConstant;
 			pl.attenuationLinear = light->mAttenuationLinear;
 			pl.attenuationQuadratic = light->mAttenuationQuadratic;
@@ -462,10 +461,10 @@ float GetOpacity(aiMaterial* m) {
 }
 float GetRefracti(aiMaterial* m) {
 	//TODO PBR FIXME: Blender aint exporting the index of refraction
-	float f = 1.0f; // Default IOR for most materials (air-glass boundary)
+	float f = 2.5f; // Default IOR for most materials (air-glass boundary)
 	if (AI_SUCCESS != m->Get(AI_MATKEY_REFRACTI, f)) {
 		std::cout << "No IOR (Refracti) in material" << std::endl;
-		f = 1.0f; // fallback
+		f = 2.5f; // fallback
 	}
 	return f;
 }
@@ -639,12 +638,12 @@ void CreateRootSignatures(transforms::RootSignatureService* rootSignatureService
 	rootSignatureService->Add(simpleLightingRootSignature, ctx->CreateSimpleLightingRootSignature(simpleLightingRootSignature));
 	rootSignatureService->Add(unlitDebugRootSignature, ctx->CreateUnlitDebugRootSignature(unlitDebugRootSignature));
 	rootSignatureService->Add(quadRenderRootSignature, ctx->CreateQuadRenderRootSignature());
-	//PBR: Create root signature for the pbr shader. For now i'll just use the same rootsig that i use for simpleLighting: three srvs (t0, t1, t2) one root constant (c0)
+	rootSignatureService->Add(shadowMapRootSignature, ctx->CreateShadowMapRootSignature());
 }
 
 void CreatePipelines(transforms::RootSignatureService* rootSignatureService, transforms::Context* ctx) {
-	//TODO PBR: Create the pbr pipeline (DONE)
-	//TODO PBR: Create the PBR Shader (DONE)
+	//TODO SHADOWS: Create a pipeline to the shadow maps
+	//TODO SHADOWS: Create the shaders for shadows
 	unlitDebugPipeline = std::make_shared<transforms::Pipeline>(
 		L"C:\\dev\\directx12\\x64\\Debug\\transforms_vertex_shader.cso",
 		L"C:\\dev\\directx12\\x64\\Debug\\transforms_pixel_shader.cso",
@@ -660,4 +659,5 @@ void CreatePipelines(transforms::RootSignatureService* rootSignatureService, tra
 		L"BSDFPipeline"
 	);
 	ctx->CreateFullscreenQuadPipeline(rootSignatureService->Get(quadRenderRootSignature).Get());
+	ctx->CreateShadowMapPipeline(rootSignatureService->Get(shadowMapRootSignature).Get());
 }

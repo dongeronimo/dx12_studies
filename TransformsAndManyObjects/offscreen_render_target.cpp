@@ -3,14 +3,7 @@
 #include "direct3d_context.h"
 #include "d3dx12.h"
 #include "shared_descriptor_heap_v2.h"
-//A global descriptor heap to make management easier for now
-ID3D12DescriptorHeap* rtvHeap = nullptr;
-ID3D12DescriptorHeap* dsvHeap = nullptr;
-UINT rtvDescSize = 0;
-UINT dsvDescSize = 0;
-UINT rtvDescIdx = 0;
-UINT dsvDescIdx = 0;
-
+#include "rtv_dsv_shared_heap.h"
 D3D12_RESOURCE_DESC CreateDesc(int w, int h, DXGI_FORMAT format, D3D12_RESOURCE_FLAGS flags) {
     D3D12_RESOURCE_DESC desc = {};
     desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
@@ -26,24 +19,9 @@ D3D12_RESOURCE_DESC CreateDesc(int w, int h, DXGI_FORMAT format, D3D12_RESOURCE_
 }
 
 transforms::OffscreenRenderTarget::OffscreenRenderTarget(int w, int h, 
-    transforms::Context* ctx, transforms::SharedDescriptorHeapV2* descriptorHeap)
+    transforms::Context* ctx, transforms::SharedDescriptorHeapV2* descriptorHeap,
+    RtvDsvDescriptorHeapManager* rtvDsvHeap)
 {
-    //if i haven't created the global descriptor heaps then create them, get their sizes, etc...
-    if (rtvHeap == nullptr) {
-        D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc = {};
-        rtvHeapDesc.NumDescriptors = 1000;  // 1000 render targets
-        rtvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
-        rtvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-        ctx->GetDevice()->CreateDescriptorHeap(&rtvHeapDesc, IID_PPV_ARGS(&rtvHeap));
-        rtvHeap->SetName(L"OffscreenRenderTargetRTVHeap");
-        D3D12_DESCRIPTOR_HEAP_DESC dsvHeapDesc = {};
-        dsvHeapDesc.NumDescriptors = 1000;  // 1 depth buffer
-        dsvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
-        dsvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-        ctx->GetDevice()->CreateDescriptorHeap(&dsvHeapDesc, IID_PPV_ARGS(&dsvHeap));
-        rtvDescSize = ctx->GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-        dsvDescSize = ctx->GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
-    }
     srvCPUHandle.resize(FRAMEBUFFER_COUNT);
     srvGPUHandle.resize(FRAMEBUFFER_COUNT);
     renderTargetTexture.resize(FRAMEBUFFER_COUNT);
@@ -70,7 +48,7 @@ transforms::OffscreenRenderTarget::OffscreenRenderTarget(int w, int h,
             &heapProps,
             D3D12_HEAP_FLAG_NONE,
             &descForColorTexture,
-            D3D12_RESOURCE_STATE_RENDER_TARGET,
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
             &clearValueForColorTexture,
             IID_PPV_ARGS(&renderTargetTexture[i]));
         //create the depth texture
@@ -92,23 +70,22 @@ transforms::OffscreenRenderTarget::OffscreenRenderTarget(int w, int h,
         rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
         rtvDesc.Texture2D.MipSlice = 0;
         rtvDesc.Texture2D.PlaneSlice = 0;
-        D3D12_CPU_DESCRIPTOR_HANDLE _rtvHandle = rtvHeap->GetCPUDescriptorHandleForHeapStart();
-        _rtvHandle.ptr += static_cast<SIZE_T>(rtvDescIdx) * rtvDescSize;
+        
+        
+        D3D12_CPU_DESCRIPTOR_HANDLE _rtvHandle = rtvDsvHeap->AllocateRTV();
         ctx->GetDevice()->CreateRenderTargetView(renderTargetTexture[i], &rtvDesc, _rtvHandle);
         rtvHandle[i] = _rtvHandle;
-        rtvDescIdx++;
+
         //create the DSV descriptor
         D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
         dsvDesc.Format = DXGI_FORMAT_D32_FLOAT;
         dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
         dsvDesc.Flags = D3D12_DSV_FLAG_NONE;
         // Get the handle to the start of the heap.
-        D3D12_CPU_DESCRIPTOR_HANDLE _dsvHandle = dsvHeap->GetCPUDescriptorHandleForHeapStart();
+        D3D12_CPU_DESCRIPTOR_HANDLE _dsvHandle = rtvDsvHeap->AllocateDSV(); //dsvHeap->GetCPUDescriptorHandleForHeapStart();
         // Offset the handle by the correct number of descriptors.
-        _dsvHandle.ptr += static_cast<SIZE_T>(dsvDescIdx) * dsvDescSize;
         ctx->GetDevice()->CreateDepthStencilView(depthTexture[i], &dsvDesc, _dsvHandle);
         dsvHandle[i] = _dsvHandle;
-        dsvDescIdx++;
 
         auto [colorCPUSrvDescriptor, colorGPUSrvDescriptor] = descriptorHeap->AllocateDescriptor();
         srvCPUHandle[i] = colorCPUSrvDescriptor;

@@ -5,19 +5,109 @@
 #include "view_projection.h"
 #include "model_matrix.h"
 #include "../Common/concatenate.h"
+#include "../Common/input_layout_service.h"
 using Microsoft::WRL::ComPtr;
 using namespace common;
 namespace transforms
 {
+    void Context::CreateShadowMapPipeline(ID3D12RootSignature* rootSig)
+    {
+        const std::wstring vertexShaderFileName = L"C:\\dev\\directx12\\x64\\Debug\\shadow_map_vs.cso";
+        const std::wstring pixelShaderFileName = L"C:\\dev\\directx12\\x64\\Debug\\shadow_map_ps.cso";
+        ///////SHADER LOADING///////
+        std::filesystem::path cwd = std::filesystem::current_path();
+        HRESULT hr;
+        ID3DBlob* vertexShader;
+        hr = D3DReadFileToBlob(vertexShaderFileName.c_str(), &vertexShader);
+        assert(hr == S_OK);
+        D3D12_SHADER_BYTECODE vertexShaderBytecode = {};
+        vertexShaderBytecode.BytecodeLength = vertexShader->GetBufferSize();
+        vertexShaderBytecode.pShaderBytecode = vertexShader->GetBufferPointer();
+        //Load fragment shader bytecode into memory
+        ID3DBlob* pixelShader;
+        hr = D3DReadFileToBlob(pixelShaderFileName.c_str(), &pixelShader);
+        assert(hr == S_OK);
+        // fill out shader bytecode structure for pixel shader
+        D3D12_SHADER_BYTECODE pixelShaderBytecode = {};
+        pixelShaderBytecode.BytecodeLength = pixelShader->GetBufferSize();
+        pixelShaderBytecode.pShaderBytecode = pixelShader->GetBufferPointer();
+        ///////////////////////////////////
+        std::vector< D3D12_INPUT_ELEMENT_DESC> inputLayout = common::input_layout_service::DefaultVertexDataAndInstanceId();
+        D3D12_INPUT_LAYOUT_DESC inputLayoutDesc = {};
+        inputLayoutDesc.NumElements = inputLayout.size();
+        inputLayoutDesc.pInputElementDescs = inputLayout.data();
+        //////////////////////////////////
+        D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
+
+        // Root signature
+        psoDesc.pRootSignature = rootSig;
+        psoDesc.VS = { vertexShader->GetBufferPointer(), vertexShader->GetBufferSize() };
+        psoDesc.PS = { pixelShader->GetBufferPointer(), pixelShader->GetBufferSize() };
+        psoDesc.InputLayout = inputLayoutDesc;
+        // Rasterizer state - optimized for shadow mapping
+        psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+        psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_BACK;  // Cull back faces
+        psoDesc.RasterizerState.FrontCounterClockwise = FALSE;
+        psoDesc.RasterizerState.DepthBias = 0;                    // No depth bias initially
+        psoDesc.RasterizerState.DepthBiasClamp = 0.0f;
+        psoDesc.RasterizerState.SlopeScaledDepthBias = 0.0f;
+        psoDesc.RasterizerState.DepthClipEnable = TRUE;
+        psoDesc.RasterizerState.MultisampleEnable = FALSE;
+        psoDesc.RasterizerState.AntialiasedLineEnable = FALSE;
+        psoDesc.RasterizerState.ForcedSampleCount = 0;
+        psoDesc.RasterizerState.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
+
+        // Blend state - no blending needed for shadow maps
+        psoDesc.BlendState.AlphaToCoverageEnable = FALSE;
+        psoDesc.BlendState.IndependentBlendEnable = FALSE;
+        psoDesc.BlendState.RenderTarget[0].BlendEnable = FALSE;
+        psoDesc.BlendState.RenderTarget[0].LogicOpEnable = FALSE;
+        psoDesc.BlendState.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
+        psoDesc.BlendState.RenderTarget[0].DestBlend = D3D12_BLEND_ZERO;
+        psoDesc.BlendState.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
+        psoDesc.BlendState.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
+        psoDesc.BlendState.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
+        psoDesc.BlendState.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+        psoDesc.BlendState.RenderTarget[0].LogicOp = D3D12_LOGIC_OP_NOOP;
+        psoDesc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+
+        // Depth stencil state - enable depth testing and writing
+        psoDesc.DepthStencilState.DepthEnable = TRUE;
+        psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+        psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
+        psoDesc.DepthStencilState.StencilEnable = FALSE;
+        psoDesc.DepthStencilState.StencilReadMask = D3D12_DEFAULT_STENCIL_READ_MASK;
+        psoDesc.DepthStencilState.StencilWriteMask = D3D12_DEFAULT_STENCIL_WRITE_MASK;
+        psoDesc.DepthStencilState.FrontFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
+        psoDesc.DepthStencilState.FrontFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
+        psoDesc.DepthStencilState.FrontFace.StencilPassOp = D3D12_STENCIL_OP_KEEP;
+        psoDesc.DepthStencilState.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+        psoDesc.DepthStencilState.BackFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
+        psoDesc.DepthStencilState.BackFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
+        psoDesc.DepthStencilState.BackFace.StencilPassOp = D3D12_STENCIL_OP_KEEP;
+        psoDesc.DepthStencilState.BackFace.StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+
+        // Sample description
+        psoDesc.SampleMask = UINT_MAX;
+        psoDesc.SampleDesc.Count = 1;
+        psoDesc.SampleDesc.Quality = 0;
+
+        // Render target formats - must match your CubeMapShadowMap format
+        psoDesc.NumRenderTargets = 1;
+        psoDesc.RTVFormats[0] = DXGI_FORMAT_R32G32B32A32_FLOAT;  // Matches your cube map format
+        psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;               // Matches your depth format
+
+        // Primitive topology
+        psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+
+        // Create the PSO
+        hr = device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&shadowMapPSO));
+        shadowMapPSO->SetName(L"ShadowMapPipeline");
+    }
     void Context::CreateFullscreenQuadPipeline(ID3D12RootSignature* rootSignature)
     {
         const std::wstring vertexShaderFileName = L"C:\\dev\\directx12\\x64\\Debug\\scene_offscreen_presentation_vs.cso";
         const std::wstring pixelShaderFileName = L"C:\\dev\\directx12\\x64\\Debug\\scene_offscreen_presentation_ps.cso";
-        // Compile shaders
-        //ComPtr<ID3DBlob> vertexShader;
-        //ComPtr<ID3DBlob> pixelShader;
-        //ComPtr<ID3DBlob> errorBlob;
-
         ///////SHADER LOADING///////
         std::filesystem::path cwd = std::filesystem::current_path();
         HRESULT hr;
@@ -666,6 +756,61 @@ namespace transforms
             IID_PPV_ARGS(&rootSignature)
         );
         rootSignature->SetName(L"QuadRenderRootSignature");
+        return rootSignature;
+    }
+
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> Context::CreateShadowMapRootSignature()
+    {
+        //the table of root signature parameters
+        std::array<CD3DX12_ROOT_PARAMETER, 3> rootParams;
+        // Parameter 0: Root constants (b0) - objectId
+        rootParams[0].InitAsConstants(
+            1,          // Number of 32-bit constants (uint objectId = 1 constant)
+            0,          // Register (b0)
+            0           // Register space
+        );
+
+        // Parameter 1: Constant buffer (b1) - ShadowMapConstants  
+        rootParams[1].InitAsConstantBufferView(
+            1,          // Register (b1)
+            0           // Register space
+        );
+
+        // Parameter 2: Structured buffer (t0) - PerObjectData
+        CD3DX12_DESCRIPTOR_RANGE srvRange = {};
+        srvRange.Init(
+            D3D12_DESCRIPTOR_RANGE_TYPE_SRV,    // Range type
+            1,                                   // Number of descriptors
+            0,                                   // Base register (t0)
+            0                                    // Register space
+        );
+
+        rootParams[2].InitAsDescriptorTable(
+            1,              // Number of descriptor ranges
+            &srvRange,      // Descriptor ranges
+            D3D12_SHADER_VISIBILITY_VERTEX  // Only vertex shader needs this
+        );
+
+        //create root signature
+        CD3DX12_ROOT_SIGNATURE_DESC rootSignatureDesc;
+        rootSignatureDesc.Init(static_cast<UINT>(rootParams.size()),//number of parameters
+            rootParams.data(),//parameter list
+            0,//number of static samplers
+            nullptr,//static samplers list
+            D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT //flags
+        );
+        //We need this serialization step
+        ID3DBlob* signature;
+        HRESULT hr = D3D12SerializeRootSignature(&rootSignatureDesc,
+            D3D_ROOT_SIGNATURE_VERSION_1,
+            &signature, nullptr);
+        assert(hr == S_OK);
+        ComPtr<ID3D12RootSignature> rootSignature = nullptr;
+        hr = device->CreateRootSignature(0,
+            signature->GetBufferPointer(), //the serialized data is used here
+            signature->GetBufferSize(), //the serialized data is used here
+            IID_PPV_ARGS(&rootSignature));
+        rootSignature->SetName(L"Shadow Map root sig");
         return rootSignature;
     }
 

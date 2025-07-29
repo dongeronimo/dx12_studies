@@ -55,6 +55,9 @@ namespace transforms
         Microsoft::WRL::ComPtr<ID3D12Device> GetDevice()const {
             return device;
         }
+        ID3D12PipelineState* GetShadowMapPipeline() {
+            return shadowMapPSO.Get();
+        }
         void CreateShadowMapPipeline(ID3D12RootSignature* rootSig);
         void CreateFullscreenQuadPipeline(ID3D12RootSignature* rootSig);
         void CreateStagingAndGPUBuffer(size_t size,

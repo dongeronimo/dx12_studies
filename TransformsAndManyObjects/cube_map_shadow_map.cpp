@@ -4,6 +4,7 @@
 #include "rtv_dsv_shared_heap.h"
 #include "../Common/concatenate.h"
 namespace transforms {
+    //TODO SHADOWS: ONE DEPTH BUFFER PER FACE SEE CLAUDE
     CubeMapShadowMap::CubeMapShadowMap(std::wstring& name) :
         m_resolution(0),
         m_colorFormat(DXGI_FORMAT_R32G32B32A32_FLOAT),
@@ -16,9 +17,38 @@ namespace transforms {
         {
             handle.ptr = 0;
         }
-        m_dsvHandle.ptr = 0;
         m_srvHandle.first.ptr = 0;
         m_srvHandle.second.ptr = 0;
+    }
+    void CubeMapShadowMap::TransitionToRenderTarget(ID3D12GraphicsCommandList* commandList, int frameIndex)
+    {
+        CD3DX12_RESOURCE_BARRIER barrierBack = CD3DX12_RESOURCE_BARRIER::Transition(
+            m_cubeMapTexture.Get(),
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+            D3D12_RESOURCE_STATE_RENDER_TARGET);
+        commandList->ResourceBarrier(1, &barrierBack);
+    }
+    void CubeMapShadowMap::TransitionToPixelShaderResource(ID3D12GraphicsCommandList* commandList, int frameIndex)
+    {
+        CD3DX12_RESOURCE_BARRIER barrierBack = CD3DX12_RESOURCE_BARRIER::Transition(
+            m_cubeMapTexture.Get(),
+            D3D12_RESOURCE_STATE_RENDER_TARGET,
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+        commandList->ResourceBarrier(1, &barrierBack);
+    }
+    void CubeMapShadowMap::SetAsRenderTarget(ID3D12GraphicsCommandList* commandList, int faceIndex)
+    {
+        commandList->OMSetRenderTargets(
+            1,
+            &m_rtvHandles[faceIndex],
+            FALSE,
+            &m_dsvHandles[faceIndex]);
+    }
+    void CubeMapShadowMap::Clear(ID3D12GraphicsCommandList* commandList, int faceIndex, 
+        std::array<float, 4> clearColor)
+    {
+        commandList->ClearRenderTargetView(m_rtvHandles[faceIndex], clearColor.data(), 0, nullptr);
+        commandList->ClearDepthStencilView(m_dsvHandles[faceIndex], D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
     }
     void CubeMapShadowMap::SetupViewMatrices(const DirectX::XMFLOAT3& lightPos)
     {
@@ -67,16 +97,21 @@ namespace transforms {
     }
     bool CubeMapShadowMap::CreateDepthStencilView(ID3D12Device* device)
     {
-        m_dsvHandle = m_descriptorManager->AllocateDSV();
-        if (m_dsvHandle.ptr == 0)
-            return false;
+        // In CreateDepthStencilView, replace the loop with:
+        for (int face = 0; face < 6; ++face) {
+            m_dsvHandles[face] = m_descriptorManager->AllocateDSV();
+            if (m_dsvHandles[face].ptr == 0)
+                return false;
 
-        D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
-        dsvDesc.Format = m_depthFormat;
-        dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
-        dsvDesc.Texture2D.MipSlice = 0;
+            D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
+            dsvDesc.Format = DXGI_FORMAT_D32_FLOAT;
+            dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
+            dsvDesc.Texture2DArray.FirstArraySlice = face;
+            dsvDesc.Texture2DArray.ArraySize = 1;  // Only one slice per view
+            dsvDesc.Texture2DArray.MipSlice = 0;
 
-        device->CreateDepthStencilView(m_depthBuffer.Get(), &dsvDesc, m_dsvHandle);
+            device->CreateDepthStencilView(m_depthBuffer.Get(), &dsvDesc, m_dsvHandles[face]);
+        }
         return true;
     }
 
@@ -104,17 +139,17 @@ namespace transforms {
 
     bool CubeMapShadowMap::CreateDepthBuffer(ID3D12Device* device)
     {
-        D3D12_RESOURCE_DESC depthDesc = {};
-        depthDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-        depthDesc.Width = m_resolution;
-        depthDesc.Height = m_resolution;
-        depthDesc.DepthOrArraySize = 1;
-        depthDesc.MipLevels = 1;
-        depthDesc.Format = m_depthFormat;
-        depthDesc.SampleDesc.Count = 1;
-        depthDesc.SampleDesc.Quality = 0;
-        depthDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-        depthDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+        D3D12_RESOURCE_DESC cubeDesc = {};
+        cubeDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        cubeDesc.Width = m_resolution;
+        cubeDesc.Height = m_resolution;
+        cubeDesc.DepthOrArraySize = 6; // 6 faces
+        cubeDesc.MipLevels = 1;
+        cubeDesc.Format = DXGI_FORMAT_D32_FLOAT;
+        cubeDesc.SampleDesc.Count = 1;      // Add this line
+        cubeDesc.SampleDesc.Quality = 0;    // Add this line
+        cubeDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;  // Add this line for completeness
+        cubeDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
 
         D3D12_HEAP_PROPERTIES heapProps = {};
         heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
@@ -127,7 +162,7 @@ namespace transforms {
         bool r = SUCCEEDED(device->CreateCommittedResource(
             &heapProps,
             D3D12_HEAP_FLAG_NONE,
-            &depthDesc,
+            &cubeDesc,
             D3D12_RESOURCE_STATE_DEPTH_WRITE,
             &clearValue,
             IID_PPV_ARGS(&m_depthBuffer)
@@ -165,7 +200,7 @@ namespace transforms {
             &heapProps,
             D3D12_HEAP_FLAG_NONE,
             &textureDesc,
-            D3D12_RESOURCE_STATE_RENDER_TARGET,
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
             &clearValue,
             IID_PPV_ARGS(&m_cubeMapTexture)
         ));
@@ -212,7 +247,7 @@ namespace transforms {
 
         // Setup projection matrix (90 degree FOV for cube faces)
         m_projectionMatrix = DirectX::XMMatrixPerspectiveFovLH(
-            DirectX::XM_PIDIV2, 1.0f, 0.1f, 1000.0f);
+            DirectX::XM_PIDIV2, 1.0f, 0.01f, 100.0f);
 
         return true;
     }

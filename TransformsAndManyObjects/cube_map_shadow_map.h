@@ -75,7 +75,7 @@ namespace transforms {
 
         // Descriptor handles
         std::array<D3D12_CPU_DESCRIPTOR_HANDLE, 6> m_rtvHandles; // One RTV per cube face
-        D3D12_CPU_DESCRIPTOR_HANDLE m_dsvHandle; // Single DSV for depth
+        std::array<D3D12_CPU_DESCRIPTOR_HANDLE, 6> m_dsvHandles;
         std::pair<D3D12_CPU_DESCRIPTOR_HANDLE, D3D12_GPU_DESCRIPTOR_HANDLE> m_srvHandle; // SRV for sampling
 
         // Shadow map properties
@@ -94,7 +94,10 @@ namespace transforms {
     public:
         CubeMapShadowMap(std::wstring& name);
         ~CubeMapShadowMap() = default;
-
+        void TransitionToRenderTarget(ID3D12GraphicsCommandList* commandList, int frameIndex);
+        void TransitionToPixelShaderResource(ID3D12GraphicsCommandList* commandList, int frameIndex);
+        void SetAsRenderTarget(ID3D12GraphicsCommandList* commandList, int faceIndex);
+        void Clear(ID3D12GraphicsCommandList* commandList, int faceIndex, std::array<float, 4> clearColor);
         // Initialize the cube map shadow map
         bool Initialize(ID3D12Device* device,
             RtvDsvDescriptorHeapManager* descriptorManager,
@@ -104,7 +107,7 @@ namespace transforms {
             DXGI_FORMAT depthFormat = DXGI_FORMAT_D32_FLOAT);
         // Get handles for rendering
         const std::array<D3D12_CPU_DESCRIPTOR_HANDLE, 6>& GetRTVHandles() const { return m_rtvHandles; }
-        D3D12_CPU_DESCRIPTOR_HANDLE GetDSVHandle() const { return m_dsvHandle; }
+        const std::array<D3D12_CPU_DESCRIPTOR_HANDLE, 6>& GetDSVHandle() const { return m_dsvHandles; }
         D3D12_GPU_DESCRIPTOR_HANDLE GetSRVHandle() const { return m_srvHandle.second; }
 
         // Get resources

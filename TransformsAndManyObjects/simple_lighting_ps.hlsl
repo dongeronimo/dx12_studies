@@ -46,13 +46,47 @@ struct PointLightDataStruct
     float4 ColorDiffuse;
     float4 ColorSpecular;
     float4 ColorAmbient; // Ambient component of THIS light
+    
+    // point light shadow mapping data
+    float4x4 projectionMatrix; // Same projection matrix used for all 6 faces
+    float shadowFarPlane; // Far plane distance for linearizing depth
+    int shadowMapIndex; // Index into the shadow map array
+    float2 _notUsed2;
 };
 StructuredBuffer<PointLightDataStruct> PointLights : register(t2); // Array of Point Light data
 
+TextureCubeArray ShadowMaps : register(t3); // Array of cube maps (one per light)
+SamplerState ShadowSampler : register(s0); // Sampler for shadow maps
 //a root constant (aka push constant), it's the index at PerObjectData
 cbuffer RootConstants : register(b0)
 {
     uint objectId; // Root constant passed by CPU
+}
+float CalculateVarianceShadow(float3 worldPos, PointLightDataStruct light, int lightIndex)
+{
+    // Calculate vector from fragment to light
+    float3 fragToLight = worldPos - light.position.xyz;
+    float currentDepth = length(fragToLight) / light.shadowFarPlane; // Normalize to [0,1]
+    
+    // Sample the cube map using the direction vector
+    float4 shadowData = ShadowMaps.Sample(ShadowSampler, float4(fragToLight, (float) lightIndex));
+    
+    // Extract variance shadow map data
+    float storedDepth = shadowData.r; // First moment (mean)
+    float storedDepthSquared = shadowData.g; // Second moment (mean squared)
+    
+    // Basic shadow test
+    if (currentDepth <= storedDepth)
+        return 1.0; // Not in shadow
+    
+    // Variance shadow mapping calculation
+    float variance = storedDepthSquared - (storedDepth * storedDepth);
+    variance = max(variance, 0.0001); // Avoid division by zero
+    
+    float d = currentDepth - storedDepth;
+    float pMax = variance / (variance + d * d);
+    
+    return pMax;
 }
 // Function to calculate the lighting contribution from a single point light
 float3 CalculatePointLightContribution(
@@ -90,9 +124,11 @@ float3 CalculatePointLightContribution(
     float NdotH = max(0.0f, dot(fragmentNormalWS, halfwayVec));
     float specularFactor = pow(NdotH, g_hardcodedMaterialShininess);
     float3 specular = specularFactor * light.ColorSpecular.rgb * g_hardcodedMaterialSpecular.rgb;
-
+    // Calculate shadow factor
+    float shadowFactor = CalculateVarianceShadow(fragmentWorldPos, light, light.shadowMapIndex);
+    
     // Combine and Apply Attenuation
-    return (diffuse + specular) * attenuation;
+    return (diffuse + specular) * attenuation * shadowFactor;
 }
 
 // Simple Reinhard tone mapping

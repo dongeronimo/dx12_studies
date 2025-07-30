@@ -10,12 +10,19 @@ namespace transforms {
     {
     public:
         SharedDescriptorHeapV2(ID3D12Device* device, UINT numDescriptors);
+        std::pair<D3D12_CPU_DESCRIPTOR_HANDLE, D3D12_GPU_DESCRIPTOR_HANDLE> GetShadowMapDescriptorRangeStart() const {
+            return shadowMapDescriptorRangeStart;
+        }
+        std::pair< D3D12_CPU_DESCRIPTOR_HANDLE, D3D12_GPU_DESCRIPTOR_HANDLE> DescriptorForShadowMap(UINT idx);
         std::pair<D3D12_CPU_DESCRIPTOR_HANDLE, D3D12_GPU_DESCRIPTOR_HANDLE> AllocateDescriptor();
+        std::pair<D3D12_CPU_DESCRIPTOR_HANDLE, D3D12_GPU_DESCRIPTOR_HANDLE> AllocateDescriptorRange(UINT count);
+        const UINT GetDescriptorSize()const { return descriptorSize; }
         ID3D12DescriptorHeap* GetHeap() {
             return heap;
         }
     private:
         void ExpandPool();
+        std::pair<D3D12_CPU_DESCRIPTOR_HANDLE, D3D12_GPU_DESCRIPTOR_HANDLE> shadowMapDescriptorRangeStart;
         ID3D12DescriptorHeap* heap;
         ID3D12Device* device;
         D3D12_CPU_DESCRIPTOR_HANDLE cpuStart;

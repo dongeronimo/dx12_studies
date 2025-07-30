@@ -30,6 +30,8 @@
 #include "offscreen_render_target.h"
 #include "rtv_dsv_shared_heap.h"
 #include "cube_map_shadow_map.h"
+#include "ShadowDataUpdateSystem.h"
+#include "point_shadow_map_calculation_system.h"
 using Microsoft::WRL::ComPtr;
 
 constexpr int W = 1024;
@@ -51,10 +53,11 @@ std::unique_ptr<transforms::SharedDescriptorHeapV2> gSharedDescriptors = nullptr
 std::unique_ptr<transforms::UniformBufferForSRVs<transforms::PerObjectData>> gPerObjectUniformBuffer = nullptr;
 std::unique_ptr<transforms::UniformBufferForSRVs<PerFrameDataForUnlitDebug>> gPerFrameUnlitDebugUniformBuffer = nullptr;
 std::unique_ptr<transforms::UniformBufferForSRVs<PerFrameDataForSimpleLighting>> gPerFrameSimpleLightingUniformBuffer = nullptr;
+std::unique_ptr<transforms::UniformBufferForSRVs<transforms::ShadowMapConstants>> gPointShadowUniformBuffer = nullptr;
 std::unique_ptr<transforms::UniformBufferForSRVs<LightingData>> gLightingDataUniformBuffer = nullptr;
 std::unique_ptr<transforms::MyImguiManager> gImguiManager = nullptr;
 std::unique_ptr<transforms::RtvDsvDescriptorHeapManager> gRtvDsvSharedHeap = nullptr;
-std::unique_ptr<transforms::ShadowMapConstantBuffer> gShadowMapConstantBuffer = nullptr;
+
 transforms::Window* gWindow = nullptr;
 
 const std::wstring unlitDebugRootSignature = L"unlit debug";
@@ -94,10 +97,10 @@ int main()
 	CreateRootSignatures(rootSignatureService.get(), ctx.get());
 	CreatePipelines(rootSignatureService.get(), ctx.get());
 	//create the shared heaps
+	
 	gSharedDescriptors = std::make_unique<transforms::SharedDescriptorHeapV2>(ctx->GetDevice().Get(), 1000);
 	gRtvDsvSharedHeap = std::make_unique<transforms::RtvDsvDescriptorHeapManager>();
 	gRtvDsvSharedHeap->Initialize(ctx->GetDevice().Get(), 1024, 1024);
-
 	gPerObjectUniformBuffer = std::make_unique<transforms::UniformBufferForSRVs<transforms::PerObjectData>>(*ctx, 
 		gSharedDescriptors.get(), 0, 10000); 
 	gPerFrameUnlitDebugUniformBuffer = std::make_unique<transforms::UniformBufferForSRVs<PerFrameDataForUnlitDebug>>(*ctx, 
@@ -106,8 +109,8 @@ int main()
 		gSharedDescriptors.get(), 2, 1);
 	gLightingDataUniformBuffer = std::make_unique<transforms::UniformBufferForSRVs<LightingData>>(*ctx, 
 		gSharedDescriptors.get(), 3, 100);
-	gShadowMapConstantBuffer = std::make_unique<transforms::ShadowMapConstantBuffer>();
-	gShadowMapConstantBuffer->Initialize(ctx->GetDevice().Get());
+	gPointShadowUniformBuffer = std::make_unique<transforms::UniformBufferForSRVs<transforms::ShadowMapConstants>>(*ctx,
+		gSharedDescriptors.get(), 4, MAX_LIGHTS * 6);
 	// Fill out the Viewport
 	SetViewportAndScissors(unlitDebugPipeline, W, H);
 	SetViewportAndScissors(BSDFPipeline, W, H);
@@ -129,13 +132,15 @@ int main()
 	gRegistry.emplace<transforms::components::tags::MainCamera>(mainCamera, transforms::components::tags::MainCamera{});
 	transforms::components::CreateCameraInputHandler(gWindow, gRegistry, mainCamera);
 	//add shadow map components to the lights
+	int shadowMapId = 0;
 	gRegistry.view<transforms::components::PointLight, transforms::components::Transform>()
-		.each([&ctx](entt::entity e, transforms::components::PointLight& pt, transforms::components::Transform& t) {
-		auto shadowMap = std::make_shared<transforms::CubeMapShadowMap>(pt.name);
+		.each([&ctx, &shadowMapId](entt::entity e, transforms::components::PointLight& pt, transforms::components::Transform& t) {
+		auto shadowMap = std::make_shared<transforms::CubeMapShadowMap>(pt.name, shadowMapId);
 		shadowMap->Initialize(ctx->GetDevice().Get(), gRtvDsvSharedHeap.get(),gSharedDescriptors.get(), 1024);
 		gRegistry.emplace<std::shared_ptr<transforms::CubeMapShadowMap>>(e, shadowMap);
+		shadowMapId++;
 	});
-
+	shadowMapId = 0;
 	//handle window resizing
 	window.mOnResize = [ &ctx](int newW, int newH) {
 		//TODO RESIZE: Resize is freezing the app
@@ -162,7 +167,6 @@ int main()
 		//wait until i can interact with this frame again
 		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList = ctx->ResetFrame();
 
-		//TODO PBR: Change the selection (DONE)
 		//Update the per-object uniform buffer
 		auto renderables = gRegistry.view<transforms::components::Renderable, transforms::components::Transform, BSDFMaterial_t>();
 		renderables.each([&ctx](entt::entity entity,
@@ -185,10 +189,18 @@ int main()
 					renderable.uniformBufferId, pod);
 			});
 		gPerObjectUniformBuffer->CopyToGPU(ctx->GetFrameIndex(), commandList.Get());
-		auto lights = gRegistry.view<transforms::components::Transform, transforms::components::PointLight>();
+		
+		auto frameIndex = ctx->GetFrameIndex();
+		
+		//TODO REFACTOR: Move this to a better place to clean up the main loop.
+		auto lights = gRegistry.view<transforms::components::Transform, transforms::components::PointLight, std::shared_ptr<transforms::CubeMapShadowMap>>();
+		//TODO REFACTOR: Create the light data upload system to process the light entities and clean up the main loop code.
 		uint32_t numLights = 0;
-		lights.each([&numLights, &ctx](entt::entity e, transforms::components::Transform t, transforms::components::PointLight l) {
-			//TODO lighting: send light data to the gpu
+		lights.each([&numLights, &ctx](
+			entt::entity e, 
+			transforms::components::Transform t, 
+			transforms::components::PointLight l, 
+			std::shared_ptr<transforms::CubeMapShadowMap> shadowMap) {
 			LightingData ld;
 			ld.attenuationConstant = l.attenuationConstant;
 			ld.attenuationLinear = l.attenuationLinear;
@@ -201,11 +213,16 @@ int main()
 			ld.position.y = _p.y;
 			ld.position.z = _p.z;
 			ld.position.w = 0;
+			//copy shadow map data.
+			DirectX::XMStoreFloat4x4(&ld.projectionMatrix, DirectX::XMMatrixTranspose(shadowMap->GetProjectionMatrix()));
+			ld.shadowFarPlane = shadowMap->GetFarPlane();
+			ld.shadowMapIndex = numLights;
+			
 			gLightingDataUniformBuffer->SetValue(ctx->GetFrameIndex(), numLights, ld);
 			numLights++;
 			});
 		gLightingDataUniformBuffer->CopyToGPU(ctx->GetFrameIndex(), commandList.Get());
-
+		//TODO REFACTOR: Move this to a system somewhere to clean up the main loop
 		auto mainCameraView = gRegistry.view<transforms::components::Transform,
 			transforms::components::Perspective,
 			transforms::components::tags::MainCamera>();
@@ -232,96 +249,90 @@ int main()
 			});
 		
 		auto shadowProjectors = gRegistry.view<transforms::components::Transform, transforms::components::PointLight, std::shared_ptr<transforms::CubeMapShadowMap>>(); //list of shadow projectors
-		auto frameIndex = ctx->GetFrameIndex();
-		shadowProjectors.each([&ctx,&commandList, frameIndex, &rootSignatureService, &renderables](entt::entity e, transforms::components::Transform& t, transforms::components::PointLight& pl, std::shared_ptr<transforms::CubeMapShadowMap> sm) {
-			//TODO SHADOWS:
-			//transition the cube map to render target.
-			sm->TransitionToRenderTarget(commandList.Get(), 0);
-			//for each face:
-			for (int i = 0; i < 6; i++) {
-				std::wstring label = L"";
-				switch (i) {
-				case 0:
-					commandList->BeginEvent(0, L"+X", sizeof(L"+X"));
-					break;
-				case 1:
-					commandList->BeginEvent(0, L"-X", sizeof(L"-X"));
-					break;
-				case 2:
-					commandList->BeginEvent(0, L"+Y", sizeof(L"+Y"));
-					break;
-				case 3:
-					commandList->BeginEvent(0, L"-Y", sizeof(L"-Y"));
-					break;
-				case 4:
-					commandList->BeginEvent(0, L"+Z", sizeof(L"+Z"));
-					break;
-				case 5:
-					commandList->BeginEvent(0, L"-Z", sizeof(L"-Z"));
-					break;
-				}
-				using namespace DirectX;
-
-				//set as render target and clear
-				sm->SetAsRenderTarget(commandList.Get(), i);
-				sm->Clear(commandList.Get(), i, {0,0,0,1});
-				D3D12_VIEWPORT viewport = {};
-				viewport.Width = static_cast<float>(1024);
-				viewport.Height = static_cast<float>(1024);
-				viewport.MinDepth = 0.0f;
-				viewport.MaxDepth = 1.0f;
-				commandList->RSSetViewports(1, &viewport);
-				D3D12_RECT scissorRect = {};
-				scissorRect.left = 0;
-				scissorRect.top = 0;
-				scissorRect.right = static_cast<float>(1024);
-				scissorRect.bottom = static_cast<float>(1024);
-				commandList->RSSetScissorRects(1, &scissorRect);
-				//TODO SHADOWS:
-				//Set up the position of the current shadow map.
-				sm->UpdateLightPosition(t.GetWorldPosition());
-				//then draw the scene from this position 
-				//bind the root signature
-				commandList->SetGraphicsRootSignature(rootSignatureService->Get(shadowMapRootSignature).Get());
-
-				ID3D12DescriptorHeap* heaps[] = { gSharedDescriptors->GetHeap() };
-				commandList->SetDescriptorHeaps(_countof(heaps), heaps);
-				//bind the per-object srv.
-				commandList->SetGraphicsRootDescriptorTable(2,
-					gPerObjectUniformBuffer->GetGPUHandle(ctx->GetFrameIndex()));
-				//set the constant buffer with the light matrix data.
-				transforms::ShadowMapConstants constants = {};
-				XMStoreFloat4x4(&constants.viewMatrix, XMMatrixTranspose(sm->GetViewMatrix(i)));
-				XMStoreFloat4x4(&constants.projMatrix, XMMatrixTranspose(sm->GetProjectionMatrix()));
-				constants.lightPosition = t.GetWorldPosition();
-				gShadowMapConstantBuffer->UpdateConstants(constants);
-				commandList->SetGraphicsRootConstantBufferView(1, gShadowMapConstantBuffer->GetGPUAddress());
-				//bind the pipeline
-				commandList->SetPipelineState(ctx->GetShadowMapPipeline());
-				//go thru the renderables drawing them. remember to get the view matrix and projection matrix
-				//using DirectX::XMMATRIX GetViewMatrix(UINT faceIndex) and  DirectX::XMMATRIX GetProjectionMatrix()
-				ctx->GetCommandList()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-				renderables.each([&ctx](entt::entity entity,
-					const transforms::components::Renderable& renderable,
-					const transforms::components::Transform& transform,
-					const BSDFMaterial_t material)
-					{
-						ctx->GetCommandList()->IASetVertexBuffers(0, 1, &renderable.mVertexBufferView);
-						ctx->GetCommandList()->IASetIndexBuffer(&renderable.mIndexBufferView);
-						ctx->GetCommandList()->SetGraphicsRoot32BitConstant(0, renderable.uniformBufferId, 0);
-						ctx->GetCommandList()->DrawIndexedInstanced(
-							renderable.mNumberOfIndices,     // number of indices
-							1,              // instance count
-							0,              // start index
-							0,              // base vertex
-							0               // start instance
-						);
-					});
-				commandList->EndEvent();
-			}
-			//transition the cube map to shader visible
-			sm->TransitionToPixelShaderResource(commandList.Get(), 0);
-		});
+		//Fill the shadow data structured buffer and copy to gpu
+		transforms::ShadowDataDataUploadSystem(shadowProjectors, gPointShadowUniformBuffer.get(), frameIndex);
+		gPointShadowUniformBuffer->CopyToGPU(frameIndex, commandList.Get());
+		///POINT LIGHT SHADOW MAP RENDER PASS
+		transforms::PointShadowMapCalculationSystem(
+			shadowProjectors,
+			renderables,
+			frameIndex,
+			rootSignatureService->Get(shadowMapRootSignature).Get(),
+			commandList.Get(),
+			ctx->GetShadowMapPipeline(),
+			gSharedDescriptors.get(),
+			gPerObjectUniformBuffer.get(),
+			gPointShadowUniformBuffer.get()
+		);
+		int shadowDataId = 0;
+		//shadowProjectors.each([&ctx,&commandList, frameIndex, &rootSignatureService, &renderables, &shadowDataId](entt::entity e, transforms::components::Transform& t, transforms::components::PointLight& pl, std::shared_ptr<transforms::CubeMapShadowMap> sm) {
+		//	//transition the cube map to render target.
+		//	sm->TransitionToRenderTarget(commandList.Get(), 0);
+		//	//for each face:
+		//	for (int i = 0; i < 6; i++) {
+		//		std::wstring label = L"";
+		//		switch (i) {
+		//		case 0:
+		//			commandList->BeginEvent(0, L"+X", sizeof(L"+X"));
+		//			break;
+		//		case 1:
+		//			commandList->BeginEvent(0, L"-X", sizeof(L"-X"));
+		//			break;
+		//		case 2:
+		//			commandList->BeginEvent(0, L"+Y", sizeof(L"+Y"));
+		//			break;
+		//		case 3:
+		//			commandList->BeginEvent(0, L"-Y", sizeof(L"-Y"));
+		//			break;
+		//		case 4:
+		//			commandList->BeginEvent(0, L"+Z", sizeof(L"+Z"));
+		//			break;
+		//		case 5:
+		//			commandList->BeginEvent(0, L"-Z", sizeof(L"-Z"));
+		//			break;
+		//		}
+		//		using namespace DirectX;
+		//		sm->SetAsRenderTarget(commandList.Get(), i);
+		//		sm->Clear(commandList.Get(), i, { 1.f,1.f,1.f,1.f });
+		//		commandList->SetGraphicsRootSignature(rootSignatureService->Get(shadowMapRootSignature).Get());
+		//		ID3D12DescriptorHeap* heaps[] = { gSharedDescriptors->GetHeap() };
+		//		commandList->SetDescriptorHeaps(_countof(heaps), heaps);
+		//		//bind per-object srv at t0
+		//		commandList->SetGraphicsRootDescriptorTable(2,
+		//			gPerObjectUniformBuffer->GetGPUHandle(ctx->GetFrameIndex()));
+		//		//bind shadow data srv at t1
+		//		commandList->SetGraphicsRootDescriptorTable(3,
+		//			gPointShadowUniformBuffer->GetGPUHandle(ctx->GetFrameIndex()));
+		//		//set viewport and scissors
+		//		//TODO REFACTOR: get this shit outta here
+		//		D3D12_VIEWPORT viewport = {};
+		//		viewport.Width = static_cast<float>(1024);
+		//		viewport.Height = static_cast<float>(1024);
+		//		viewport.MinDepth = 0.0f;
+		//		viewport.MaxDepth = 1.0f;
+		//		commandList->RSSetViewports(1, &viewport);
+		//		D3D12_RECT scissorRect = {};
+		//		scissorRect.left = 0;
+		//		scissorRect.top = 0;
+		//		scissorRect.right = static_cast<float>(1024);
+		//		scissorRect.bottom = static_cast<float>(1024);
+		//		commandList->RSSetScissorRects(1, &scissorRect);
+		//		commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		//		renderables.each([&ctx, &commandList, &shadowDataId](entt::entity entity, const transforms::components::Renderable& renderable, const transforms::components::Transform& transform, const BSDFMaterial_t material)
+		//			{
+		//				commandList->IASetVertexBuffers(0, 1, &renderable.mVertexBufferView);
+		//				commandList->IASetIndexBuffer(&renderable.mIndexBufferView);
+		//				commandList->SetGraphicsRoot32BitConstant(0, renderable.uniformBufferId, 0);
+		//				commandList->SetGraphicsRoot32BitConstant(1, shadowDataId, 0);
+		//				commandList->DrawIndexedInstanced(renderable.mNumberOfIndices, 1, 0, 0, 0);
+		//			});
+		//		commandList->EndEvent();
+		//		shadowDataId++;
+		//	}
+		//	//transition the cube map to shader visible
+		//	sm->TransitionToPixelShaderResource(commandList.Get(), 0);
+		//});
+		commandList->BeginEvent(0, L"MainRenderPass", sizeof(L"MainRenderPass"));
 		SetOffscreenTextureAsCurrentRenderTarget<transforms::OffscreenRenderTarget>(mainRenderPassTarget.get(),commandList, ctx->GetFrameIndex());
 		//Bind the root descriptor
 		commandList->SetGraphicsRootSignature(rootSignatureService->Get(simpleLightingRootSignature).Get());
@@ -329,19 +340,20 @@ int main()
 		ID3D12DescriptorHeap* heaps[] = { gSharedDescriptors->GetHeap() };
 		commandList->SetDescriptorHeaps(_countof(heaps), heaps);
 		// Bind descriptor tables
+
+		std::pair<D3D12_CPU_DESCRIPTOR_HANDLE, D3D12_GPU_DESCRIPTOR_HANDLE> shadowMapDescriptorStart = gSharedDescriptors->GetShadowMapDescriptorRangeStart();
 		// Root parameter 0: per-object data SRV (t0)
 		commandList->SetGraphicsRootDescriptorTable(0,
 			gPerObjectUniformBuffer->GetGPUHandle(ctx->GetFrameIndex()));
-		//TODO PBR: Bind the pbr buffer
 		//lighting: bind the light buffer	
 		commandList->SetGraphicsRootDescriptorTable(2,
 			gPerFrameSimpleLightingUniformBuffer->GetGPUHandle(ctx->GetFrameIndex()));
 		commandList->SetGraphicsRootDescriptorTable(3,
 			gLightingDataUniformBuffer->GetGPUHandle(ctx->GetFrameIndex()));
+		commandList->SetGraphicsRootDescriptorTable(4, shadowMapDescriptorStart.second);
 		// Fill out the Viewport
 		SetViewportAndScissors(unlitDebugPipeline, W, H);
 		SetViewportAndScissors(BSDFPipeline, W, H);
-		// TODO PBR: Bind the pbr pipeline
 		BSDFPipeline->Bind(ctx->GetCommandList());
 		//Draw, in the same order that we passed the data
 		renderables.each([&ctx](entt::entity entity,
@@ -362,7 +374,8 @@ int main()
 				);
 			});
 
-
+		commandList->EndEvent();
+		commandList->BeginEvent(0, L"PresentationPass", sizeof(L"PresentationPass"));
 		///The main render pass is finished. We get the offscreen texture that was used as target and draw it 
 		///over a quad.
 		//the render target has to be in D3D12_RESOURCE_STATE_RENDER_TARGET state to be be used by the Output Merger to compose the scene
@@ -390,6 +403,7 @@ int main()
 
 		//now that we drew everything, transition the rtv to presentation
 		ctx->TransitionCurrentRenderTarget(D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+		commandList->EndEvent();
 		//Submit the commands and present
 		ctx->Present();
 		};

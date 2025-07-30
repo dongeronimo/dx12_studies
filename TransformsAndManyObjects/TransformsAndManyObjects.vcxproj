@@ -161,6 +161,7 @@
     <ClCompile Include="on_esc_handler.cpp" />
     <ClCompile Include="pipeline.cpp" />
     <ClCompile Include="script_runner_system.cpp" />
+    <ClCompile Include="ShadowDataUpdateSystem.cpp" />
     <ClCompile Include="shared_descriptor_heap_v2.cpp" />
     <ClCompile Include="TransformsAndManyObjects.cpp" />
     <ClCompile Include="view_projection.cpp" />
@@ -191,8 +192,10 @@
     <ClInclude Include="per_object_data.h" />
     <ClInclude Include="per_object_uniform_buffer.h" />
     <ClInclude Include="pipeline.h" />
+    <ClInclude Include="point_shadow_map_calculation_system.h" />
     <ClInclude Include="rtv_dsv_shared_heap.h" />
     <ClInclude Include="script_runner_system.h" />
+    <ClInclude Include="ShadowDataUpdateSystem.h" />
     <ClInclude Include="shared_descriptor_heap_v2.h" />
     <ClInclude Include="transform.h" />
     <ClInclude Include="view_projection.h" />

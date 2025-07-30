@@ -1,18 +1,11 @@
 // Shadow map view/projection matrices
-cbuffer ShadowMapConstants : register(b1)
+struct ShadowMapConstants
 {
     float4x4 viewMatrix;
     float4x4 projMatrix;
     float3 lightPosition;
-    float padding;
-}
-
-// Root constant with object ID
-cbuffer RootConstants : register(b0)
-{
-    uint objectId;
-}
-
+    float farPlane;
+};
 // Per-object data structure
 struct PerObjectDataStruct
 {
@@ -25,10 +18,16 @@ struct PerObjectDataStruct
     float refracti;
     float4 emissiveColor;
 };
-
-// Structured buffer for per-object data
+cbuffer RootConstants1 : register(b0)
+{
+    uint objectId;
+}
+cbuffer RootConstants2 : register(b1)
+{
+    uint shadowDataId;
+}
 StructuredBuffer<PerObjectDataStruct> PerObjectData : register(t0);
-
+StructuredBuffer<ShadowMapConstants> ShadowDataTable : register(t1);
 // Vertex input structure
 struct VS_INPUT
 {
@@ -51,25 +50,20 @@ struct VS_OUTPUT
 VS_OUTPUT main(VS_INPUT input)
 {
     VS_OUTPUT output;
-    
     // Get per-object data using the root constant object ID
     PerObjectDataStruct objData = PerObjectData[objectId];
-    
+    // Get current shadow using the shadow id
+    ShadowMapConstants shadowData = ShadowDataTable[shadowDataId];
     // Transform vertex to world space
     float4 worldPos = mul(float4(input.pos, 1.0f), objData.modelMat);
-    
     // Transform to light's view space
-    float4 viewPos = mul(worldPos, viewMatrix);
-    
+    float4 viewPos = mul(worldPos, shadowData.viewMatrix);
     // Transform to light's clip space
-    output.position = mul(viewPos, projMatrix);
-    
+    output.position = mul(viewPos, shadowData.projMatrix);
     // Calculate linear depth for variance shadow mapping
     // We store the distance from light to fragment
-    output.depth = length(worldPos.xyz - lightPosition);
-    
+    output.depth = length(worldPos.xyz - shadowData.lightPosition)/shadowData.farPlane;
     // Store world position (optional, for debugging)
     output.worldPos = worldPos.xyz;
-    
     return output;
 }

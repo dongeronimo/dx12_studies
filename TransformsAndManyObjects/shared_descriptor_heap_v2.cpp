@@ -15,6 +15,22 @@ transforms::SharedDescriptorHeapV2::SharedDescriptorHeapV2(ID3D12Device* device,
     gpuStart = heap->GetGPUDescriptorHandleForHeapStart();
     descriptorSize = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     nextFreeIndex = 0;
+
+    //there are some SRVs that have to be pre-allocated, like the ones for shadow maps.
+    shadowMapDescriptorRangeStart = AllocateDescriptorRange(MAX_LIGHTS);
+}
+
+std::pair<D3D12_CPU_DESCRIPTOR_HANDLE, D3D12_GPU_DESCRIPTOR_HANDLE> transforms::SharedDescriptorHeapV2::DescriptorForShadowMap(UINT idx)
+{
+    if (idx >= MAX_LIGHTS) {
+        throw std::out_of_range("Shadow map index out of range");
+    }
+    D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = shadowMapDescriptorRangeStart.first;
+    cpuHandle.ptr += (idx * descriptorSize);
+
+    D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = shadowMapDescriptorRangeStart.second;
+    gpuHandle.ptr += (idx * descriptorSize);
+    return {cpuHandle, gpuHandle };
 }
 
 std::pair<D3D12_CPU_DESCRIPTOR_HANDLE, D3D12_GPU_DESCRIPTOR_HANDLE> transforms::SharedDescriptorHeapV2::AllocateDescriptor()
@@ -25,6 +41,24 @@ std::pair<D3D12_CPU_DESCRIPTOR_HANDLE, D3D12_GPU_DESCRIPTOR_HANDLE> transforms::
     }
 
     UINT index = nextFreeIndex++;
+
+    D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = cpuStart;
+    cpuHandle.ptr += (index * descriptorSize);
+
+    D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = gpuStart;
+    gpuHandle.ptr += (index * descriptorSize);
+
+    return { cpuHandle, gpuHandle };
+}
+
+std::pair<D3D12_CPU_DESCRIPTOR_HANDLE, D3D12_GPU_DESCRIPTOR_HANDLE> transforms::SharedDescriptorHeapV2::AllocateDescriptorRange(UINT count)
+{
+    if (nextFreeIndex + count > currentCapacity) {
+        ExpandPool();  // You might want to make ExpandPool smarter for large count
+    }
+
+    UINT index = nextFreeIndex;
+    nextFreeIndex += count;
 
     D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = cpuStart;
     cpuHandle.ptr += (index * descriptorSize);

@@ -655,27 +655,52 @@ namespace transforms
     Microsoft::WRL::ComPtr<ID3D12RootSignature> Context::CreateSimpleLightingRootSignature(const std::wstring& name)
     {
         //the table of root signature parameters
-        std::array<CD3DX12_ROOT_PARAMETER, 4> rootParams;
+        std::array<CD3DX12_ROOT_PARAMETER, 5> rootParams; // Increased from 4 to 5
+
         //1) PerObjectData 
-        CD3DX12_DESCRIPTOR_RANGE perObjectDataSRVRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1,0); //register t0
+        CD3DX12_DESCRIPTOR_RANGE perObjectDataSRVRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0); //register t0
         rootParams[0].InitAsDescriptorTable(1, &perObjectDataSRVRange);
+
         //2) RootConstants - holds the objectId push constant
         rootParams[1].InitAsConstants(1, 0);//register b0
+
         //3) PerFrameData (view/projection data)
         CD3DX12_DESCRIPTOR_RANGE perFrameDataSRVRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1); //register t1
         rootParams[2].InitAsDescriptorTable(1, &perFrameDataSRVRange);
+
         //4) lighting data
         CD3DX12_DESCRIPTOR_RANGE lightingSRVRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2);
         rootParams[3].InitAsDescriptorTable(1, &lightingSRVRange);
+
+        //5) Shadow maps - NEW
+        CD3DX12_DESCRIPTOR_RANGE shadowMapsSRVRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, MAX_LIGHTS, 3); // 8 shadow maps starting at t3
+        rootParams[4].InitAsDescriptorTable(1, &shadowMapsSRVRange, D3D12_SHADER_VISIBILITY_PIXEL);
+
+        // Static sampler for shadow maps - NEW
+        CD3DX12_STATIC_SAMPLER_DESC staticSampler;
+        staticSampler.Init(0,                                    // s0
+            D3D12_FILTER_MIN_MAG_MIP_LINEAR,      // Linear filtering
+            D3D12_TEXTURE_ADDRESS_MODE_CLAMP,     // Clamp U
+            D3D12_TEXTURE_ADDRESS_MODE_CLAMP,     // Clamp V  
+            D3D12_TEXTURE_ADDRESS_MODE_CLAMP,     // Clamp W
+            0.0f,                                  // MipLODBias
+            16,                                    // MaxAnisotropy
+            D3D12_COMPARISON_FUNC_NEVER,          // ComparisonFunc
+            D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE, // BorderColor
+            0.0f,                                  // MinLOD
+            D3D12_FLOAT32_MAX,                     // MaxLOD
+            D3D12_SHADER_VISIBILITY_PIXEL,        // Visibility
+            0);                                    // RegisterSpace
 
         //create root signature
         CD3DX12_ROOT_SIGNATURE_DESC rootSignatureDesc;
         rootSignatureDesc.Init(static_cast<UINT>(rootParams.size()),//number of parameters
             rootParams.data(),//parameter list
-            0,//number of static samplers
-            nullptr,//static samplers list
+            1,//number of static samplers - CHANGED from 0 to 1
+            &staticSampler,//static samplers list - CHANGED from nullptr
             D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT //flags
         );
+
         //We need this serialization step
         ID3DBlob* signature;
         HRESULT hr = D3D12SerializeRootSignature(&rootSignatureDesc,
@@ -690,7 +715,6 @@ namespace transforms
         rootSignature->SetName(name.c_str());
         return rootSignature;
     }
-
     Microsoft::WRL::ComPtr<ID3D12RootSignature> Context::CreateQuadRenderRootSignature()
     {
         using namespace Microsoft::WRL;
@@ -762,34 +786,47 @@ namespace transforms
     Microsoft::WRL::ComPtr<ID3D12RootSignature> Context::CreateShadowMapRootSignature()
     {
         //the table of root signature parameters
-        std::array<CD3DX12_ROOT_PARAMETER, 3> rootParams;
+        std::array<CD3DX12_ROOT_PARAMETER, 4> rootParams;
         // Parameter 0: Root constants (b0) - objectId
         rootParams[0].InitAsConstants(
             1,          // Number of 32-bit constants (uint objectId = 1 constant)
             0,          // Register (b0)
             0           // Register space
         );
-
-        // Parameter 1: Constant buffer (b1) - ShadowMapConstants  
-        rootParams[1].InitAsConstantBufferView(
+        // Parameter 1: Root constants (b1) - Shadow data id
+        rootParams[1].InitAsConstants(
+            1,          // Number of 32-bit constants (uint objectId = 1 constant)
             1,          // Register (b1)
             0           // Register space
         );
 
         // Parameter 2: Structured buffer (t0) - PerObjectData
-        CD3DX12_DESCRIPTOR_RANGE srvRange = {};
-        srvRange.Init(
+        CD3DX12_DESCRIPTOR_RANGE srvRangeForPerObjectData = {};
+        srvRangeForPerObjectData.Init(
             D3D12_DESCRIPTOR_RANGE_TYPE_SRV,    // Range type
             1,                                   // Number of descriptors
             0,                                   // Base register (t0)
             0                                    // Register space
         );
-
         rootParams[2].InitAsDescriptorTable(
             1,              // Number of descriptor ranges
-            &srvRange,      // Descriptor ranges
+            &srvRangeForPerObjectData,      // Descriptor ranges
             D3D12_SHADER_VISIBILITY_VERTEX  // Only vertex shader needs this
         );
+        // Parameter 3: Structured buffer (t1) - ShadowData
+        CD3DX12_DESCRIPTOR_RANGE srvRangeForShadowData = {};
+        srvRangeForShadowData.Init(
+            D3D12_DESCRIPTOR_RANGE_TYPE_SRV,    // Range type
+            1,                                   // Number of descriptors
+            1,                                   // Base register (t0)
+            0                                    // Register space
+        );
+        rootParams[3].InitAsDescriptorTable(
+            1,              // Number of descriptor ranges
+            &srvRangeForShadowData,      // Descriptor ranges
+            D3D12_SHADER_VISIBILITY_ALL  // Only vertex shader needs this
+        );
+
 
         //create root signature
         CD3DX12_ROOT_SIGNATURE_DESC rootSignatureDesc;

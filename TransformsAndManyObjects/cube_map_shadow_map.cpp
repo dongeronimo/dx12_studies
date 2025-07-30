@@ -4,14 +4,15 @@
 #include "rtv_dsv_shared_heap.h"
 #include "../Common/concatenate.h"
 namespace transforms {
-    //TODO SHADOWS: ONE DEPTH BUFFER PER FACE SEE CLAUDE
-    CubeMapShadowMap::CubeMapShadowMap(std::wstring& name) :
+    
+    CubeMapShadowMap::CubeMapShadowMap(std::wstring& name, UINT id) :
         m_resolution(0),
         m_colorFormat(DXGI_FORMAT_R32G32B32A32_FLOAT),
         m_depthFormat(DXGI_FORMAT_D32_FLOAT),
         m_descriptorManager(nullptr),
         m_name(name),
-        m_srvHeapManager(nullptr) {
+        m_srvHeapManager(nullptr),
+        m_id(id){
         // Initialize handles to invalid values
         for (auto& handle : m_rtvHandles)
         {
@@ -81,7 +82,8 @@ namespace transforms {
 
     bool CubeMapShadowMap::CreateShaderResourceView(ID3D12Device* device)
     {
-        m_srvHandle = m_srvHeapManager->AllocateDescriptor();
+        // Use the SAME heap that will be used for the descriptor table
+        m_srvHandle = m_srvHeapManager->DescriptorForShadowMap(m_id); // This should be GPU-visible
         if (m_srvHandle.first.ptr == 0)
             return false;
 
@@ -247,7 +249,7 @@ namespace transforms {
 
         // Setup projection matrix (90 degree FOV for cube faces)
         m_projectionMatrix = DirectX::XMMatrixPerspectiveFovLH(
-            DirectX::XM_PIDIV2, 1.0f, 0.01f, 100.0f);
+            DirectX::XM_PIDIV2, 1.0f, 0.01f, m_farPlane);
 
         return true;
     }

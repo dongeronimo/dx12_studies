@@ -61,6 +61,12 @@ struct PointLightsDataStruct
     float4 ColorDiffuse;
     float4 ColorSpecular;
     float4 ColorAmbient;
+    
+    // point light shadow mapping data
+    float4x4 projectionMatrix; // Same projection matrix used for all 6 faces
+    float shadowFarPlane; // Far plane distance for linearizing depth
+    int shadowMapIndex; // Index into the shadow map array
+    float2 _notUsed2;
 };
 
 // Array of Point Light data

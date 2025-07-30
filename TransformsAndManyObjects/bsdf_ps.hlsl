@@ -46,12 +46,21 @@ struct PointLightsDataStruct
     float4 ColorDiffuse; // Diffuse light color and intensity
     float4 ColorSpecular; // Specular light color and intensity
     float4 ColorAmbient; // Ambient light color and intensity
+    
+    // point light shadow mapping data
+    float4x4 projectionMatrix; // Same projection matrix used for all 6 faces
+    float shadowFarPlane; // Far plane distance for linearizing depth
+    int shadowMapIndex; // Index into the shadow map array
+    float2 _notUsed2;
 };
 
 // Structured buffer resources containing arrays of data for all objects/lights
 StructuredBuffer<PerObjectDataStruct> PerObjectData : register(t0);
 StructuredBuffer<PerFrameDataStruct> PerFrameData : register(t1);
 StructuredBuffer<PointLightsDataStruct> PointLights : register(t2);
+
+TextureCubeArray ShadowMaps : register(t3); // Array of cube maps (one per light)
+SamplerState ShadowSampler : register(s0); // Sampler for shadow maps
 
 // Root constant containing the index to access current object data
 cbuffer RootConstants : register(b0)
@@ -64,6 +73,32 @@ static const float PI = 3.14159265359f;
 static const float MIN_ROUGHNESS = 0.04f; // Minimum roughness to prevent numerical issues
 static const float EPSILON = 0.001f; // Small value to prevent division by zero
 
+float CalculateVarianceShadow(float3 worldPos, PointLightsDataStruct light, int lightIndex)
+{
+    // Calculate vector from fragment to light
+    float3 fragToLight = worldPos - light.position.xyz;
+    float currentDepth = length(fragToLight) / light.shadowFarPlane; // Normalize to [0,1]
+    
+    // Sample the cube map using the direction vector
+    float4 shadowData = ShadowMaps.Sample(ShadowSampler, float4(fragToLight, (float) lightIndex));
+    
+    // Extract variance shadow map data
+    float storedDepth = shadowData.r; // First moment (mean)
+    float storedDepthSquared = shadowData.g; // Second moment (mean squared)
+    
+    // Basic shadow test
+    if (currentDepth <= storedDepth)
+        return 1.0; // Not in shadow
+    
+    // Variance shadow mapping calculation
+    float variance = storedDepthSquared - (storedDepth * storedDepth);
+    variance = max(variance, 0.0001); // Avoid division by zero
+    
+    float d = currentDepth - storedDepth;
+    float pMax = variance / (variance + d * d);
+    
+    return pMax;
+}
 /**
  * Calculates Fresnel reflectance using Schlick's approximation
  * @param cosTheta: Cosine of angle between view direction and half vector
@@ -266,7 +301,9 @@ float4 main(VS_OUTPUT input) : SV_TARGET
         
         // Calculate light attenuation based on distance
         float attenuation = CalculatePointLightAttenuation(currentLight, lightDistance);
-        
+        // Calculate shadow factor
+        float shadowFactor = CalculateVarianceShadow(input.worldPos, currentLight, currentLight.shadowMapIndex);
+    
         // Skip light contribution if attenuation is negligible
         if (attenuation < 0.001f)
             continue;
@@ -279,7 +316,7 @@ float4 main(VS_OUTPUT input) : SV_TARGET
         float lightIntensity = currentLight.ColorDiffuse.a;
         
         // Accumulate light contribution with attenuation
-        finalColor += brdfValue * lightColor * lightIntensity * attenuation;
+        finalColor += brdfValue * lightColor * lightIntensity * attenuation * shadowFactor;
         
         //// Add ambient contribution (only once, not per light)
         //if (lightIndex == 0)

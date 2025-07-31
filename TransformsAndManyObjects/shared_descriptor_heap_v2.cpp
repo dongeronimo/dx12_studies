@@ -17,7 +17,7 @@ transforms::SharedDescriptorHeapV2::SharedDescriptorHeapV2(ID3D12Device* device,
     nextFreeIndex = 0;
 
     //there are some SRVs that have to be pre-allocated, like the ones for shadow maps.
-    shadowMapDescriptorRangeStart = AllocateDescriptorRange(MAX_LIGHTS);
+    shadowMapDescriptorRangeStart = AllocateDescriptorRange(MAX_LIGHTS * 6);
 }
 
 std::pair<D3D12_CPU_DESCRIPTOR_HANDLE, D3D12_GPU_DESCRIPTOR_HANDLE> transforms::SharedDescriptorHeapV2::DescriptorForShadowMap(UINT idx)

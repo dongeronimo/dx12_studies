@@ -48,9 +48,9 @@ namespace transforms
         psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
         psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_BACK;  // Cull back faces
         psoDesc.RasterizerState.FrontCounterClockwise = FALSE;
-        psoDesc.RasterizerState.DepthBias = 0;                    // No depth bias initially
+        psoDesc.RasterizerState.DepthBias = 100;                    
         psoDesc.RasterizerState.DepthBiasClamp = 0.0f;
-        psoDesc.RasterizerState.SlopeScaledDepthBias = 0.0f;
+        psoDesc.RasterizerState.SlopeScaledDepthBias = 1.0f;
         psoDesc.RasterizerState.DepthClipEnable = TRUE;
         psoDesc.RasterizerState.MultisampleEnable = FALSE;
         psoDesc.RasterizerState.AntialiasedLineEnable = FALSE;
@@ -673,7 +673,7 @@ namespace transforms
         rootParams[3].InitAsDescriptorTable(1, &lightingSRVRange);
 
         //5) Shadow maps - NEW
-        CD3DX12_DESCRIPTOR_RANGE shadowMapsSRVRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, MAX_LIGHTS, 3); // 8 shadow maps starting at t3
+        CD3DX12_DESCRIPTOR_RANGE shadowMapsSRVRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, MAX_LIGHTS*6, 3); // 8 shadow maps starting at t3
         rootParams[4].InitAsDescriptorTable(1, &shadowMapsSRVRange, D3D12_SHADER_VISIBILITY_PIXEL);
 
         // Static sampler for shadow maps - NEW

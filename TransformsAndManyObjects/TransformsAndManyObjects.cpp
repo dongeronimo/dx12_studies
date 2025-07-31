@@ -126,7 +126,7 @@ int main()
 	cameraPerspective.fovDegrees = 45.0f;
 	cameraPerspective.ratio = (float)W/ (float)H;
 	cameraPerspective.zNear = 0.1f;
-	cameraPerspective.zFar = 100.f;
+	cameraPerspective.zFar = 500.f;
 	gRegistry.emplace<transforms::components::Transform>(mainCamera, cameraTransform);
 	gRegistry.emplace<transforms::components::Perspective>(mainCamera, cameraPerspective);
 	gRegistry.emplace<transforms::components::tags::MainCamera>(mainCamera, transforms::components::tags::MainCamera{});
@@ -136,7 +136,7 @@ int main()
 	gRegistry.view<transforms::components::PointLight, transforms::components::Transform>()
 		.each([&ctx, &shadowMapId](entt::entity e, transforms::components::PointLight& pt, transforms::components::Transform& t) {
 		auto shadowMap = std::make_shared<transforms::CubeMapShadowMap>(pt.name, shadowMapId);
-		shadowMap->Initialize(ctx->GetDevice().Get(), gRtvDsvSharedHeap.get(),gSharedDescriptors.get(), 1024);
+		shadowMap->Initialize(ctx->GetDevice().Get(), gRtvDsvSharedHeap.get(),gSharedDescriptors.get(), SHADOW_MAP_SIZE);
 		gRegistry.emplace<std::shared_ptr<transforms::CubeMapShadowMap>>(e, shadowMap);
 		shadowMapId++;
 	});
@@ -264,74 +264,6 @@ int main()
 			gPerObjectUniformBuffer.get(),
 			gPointShadowUniformBuffer.get()
 		);
-		int shadowDataId = 0;
-		//shadowProjectors.each([&ctx,&commandList, frameIndex, &rootSignatureService, &renderables, &shadowDataId](entt::entity e, transforms::components::Transform& t, transforms::components::PointLight& pl, std::shared_ptr<transforms::CubeMapShadowMap> sm) {
-		//	//transition the cube map to render target.
-		//	sm->TransitionToRenderTarget(commandList.Get(), 0);
-		//	//for each face:
-		//	for (int i = 0; i < 6; i++) {
-		//		std::wstring label = L"";
-		//		switch (i) {
-		//		case 0:
-		//			commandList->BeginEvent(0, L"+X", sizeof(L"+X"));
-		//			break;
-		//		case 1:
-		//			commandList->BeginEvent(0, L"-X", sizeof(L"-X"));
-		//			break;
-		//		case 2:
-		//			commandList->BeginEvent(0, L"+Y", sizeof(L"+Y"));
-		//			break;
-		//		case 3:
-		//			commandList->BeginEvent(0, L"-Y", sizeof(L"-Y"));
-		//			break;
-		//		case 4:
-		//			commandList->BeginEvent(0, L"+Z", sizeof(L"+Z"));
-		//			break;
-		//		case 5:
-		//			commandList->BeginEvent(0, L"-Z", sizeof(L"-Z"));
-		//			break;
-		//		}
-		//		using namespace DirectX;
-		//		sm->SetAsRenderTarget(commandList.Get(), i);
-		//		sm->Clear(commandList.Get(), i, { 1.f,1.f,1.f,1.f });
-		//		commandList->SetGraphicsRootSignature(rootSignatureService->Get(shadowMapRootSignature).Get());
-		//		ID3D12DescriptorHeap* heaps[] = { gSharedDescriptors->GetHeap() };
-		//		commandList->SetDescriptorHeaps(_countof(heaps), heaps);
-		//		//bind per-object srv at t0
-		//		commandList->SetGraphicsRootDescriptorTable(2,
-		//			gPerObjectUniformBuffer->GetGPUHandle(ctx->GetFrameIndex()));
-		//		//bind shadow data srv at t1
-		//		commandList->SetGraphicsRootDescriptorTable(3,
-		//			gPointShadowUniformBuffer->GetGPUHandle(ctx->GetFrameIndex()));
-		//		//set viewport and scissors
-		//		//TODO REFACTOR: get this shit outta here
-		//		D3D12_VIEWPORT viewport = {};
-		//		viewport.Width = static_cast<float>(1024);
-		//		viewport.Height = static_cast<float>(1024);
-		//		viewport.MinDepth = 0.0f;
-		//		viewport.MaxDepth = 1.0f;
-		//		commandList->RSSetViewports(1, &viewport);
-		//		D3D12_RECT scissorRect = {};
-		//		scissorRect.left = 0;
-		//		scissorRect.top = 0;
-		//		scissorRect.right = static_cast<float>(1024);
-		//		scissorRect.bottom = static_cast<float>(1024);
-		//		commandList->RSSetScissorRects(1, &scissorRect);
-		//		commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		//		renderables.each([&ctx, &commandList, &shadowDataId](entt::entity entity, const transforms::components::Renderable& renderable, const transforms::components::Transform& transform, const BSDFMaterial_t material)
-		//			{
-		//				commandList->IASetVertexBuffers(0, 1, &renderable.mVertexBufferView);
-		//				commandList->IASetIndexBuffer(&renderable.mIndexBufferView);
-		//				commandList->SetGraphicsRoot32BitConstant(0, renderable.uniformBufferId, 0);
-		//				commandList->SetGraphicsRoot32BitConstant(1, shadowDataId, 0);
-		//				commandList->DrawIndexedInstanced(renderable.mNumberOfIndices, 1, 0, 0, 0);
-		//			});
-		//		commandList->EndEvent();
-		//		shadowDataId++;
-		//	}
-		//	//transition the cube map to shader visible
-		//	sm->TransitionToPixelShaderResource(commandList.Get(), 0);
-		//});
 		commandList->BeginEvent(0, L"MainRenderPass", sizeof(L"MainRenderPass"));
 		SetOffscreenTextureAsCurrentRenderTarget<transforms::OffscreenRenderTarget>(mainRenderPassTarget.get(),commandList, ctx->GetFrameIndex());
 		//Bind the root descriptor

@@ -38,16 +38,16 @@ namespace transforms {
 
         inline void SetViewport(ID3D12GraphicsCommandList* commandList) {
             D3D12_VIEWPORT viewport = {};
-            viewport.Width = static_cast<float>(1024);
-            viewport.Height = static_cast<float>(1024);
+            viewport.Width = static_cast<float>(SHADOW_MAP_SIZE);
+            viewport.Height = static_cast<float>(SHADOW_MAP_SIZE);
             viewport.MinDepth = 0.0f;
             viewport.MaxDepth = 1.0f;
             commandList->RSSetViewports(1, &viewport);
             D3D12_RECT scissorRect = {};
             scissorRect.left = 0;
             scissorRect.top = 0;
-            scissorRect.right = static_cast<float>(1024);
-            scissorRect.bottom = static_cast<float>(1024);
+            scissorRect.right = static_cast<float>(SHADOW_MAP_SIZE);
+            scissorRect.bottom = static_cast<float>(SHADOW_MAP_SIZE);
             commandList->RSSetScissorRects(1, &scissorRect);
         }
     }

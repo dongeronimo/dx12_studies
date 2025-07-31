@@ -249,7 +249,7 @@ namespace transforms {
 
         // Setup projection matrix (90 degree FOV for cube faces)
         m_projectionMatrix = DirectX::XMMatrixPerspectiveFovLH(
-            DirectX::XM_PIDIV2, 1.0f, 0.01f, m_farPlane);
+            DirectX::XM_PIDIV2, 1.0f, 0.1f, m_farPlane);
 
         return true;
     }

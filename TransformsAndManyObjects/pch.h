@@ -29,4 +29,5 @@ constexpr int FRAMEBUFFER_COUNT = 2;
 constexpr int MAX_NUMBER_OF_OBJ = 10000;
 constexpr bool FULLSCREEN = false;
 constexpr int MAX_LIGHTS = 16;
+constexpr int SHADOW_MAP_SIZE = 2048;
 

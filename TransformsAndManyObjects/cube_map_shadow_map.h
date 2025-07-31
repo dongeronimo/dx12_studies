@@ -14,63 +14,10 @@ namespace transforms {
         float farPlane;
     };
 
-    //// You need to create and manage a constant buffer for shadow map constants
-    //class ShadowMapConstantBuffer
-    //{
-    //private:
-    //    ComPtr<ID3D12Resource> m_constantBuffer;
-    //    UINT8* m_mappedData;
-
-    //public:
-    //    bool Initialize(ID3D12Device* device)
-    //    {
-    //        // Create upload heap for constant buffer
-    //        D3D12_HEAP_PROPERTIES heapProps = {};
-    //        heapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
-
-    //        D3D12_RESOURCE_DESC resourceDesc = {};
-    //        resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-    //        resourceDesc.Width = (sizeof(ShadowMapConstants) + 255) & ~255; // Align to 256 bytes
-    //        resourceDesc.Height = 1;
-    //        resourceDesc.DepthOrArraySize = 1;
-    //        resourceDesc.MipLevels = 1;
-    //        resourceDesc.Format = DXGI_FORMAT_UNKNOWN;
-    //        resourceDesc.SampleDesc.Count = 1;
-    //        resourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-
-    //        HRESULT hr = device->CreateCommittedResource(
-    //            &heapProps,
-    //            D3D12_HEAP_FLAG_NONE,
-    //            &resourceDesc,
-    //            D3D12_RESOURCE_STATE_GENERIC_READ,
-    //            nullptr,
-    //            IID_PPV_ARGS(&m_constantBuffer)
-    //        );
-
-    //        if (FAILED(hr))
-    //            return false;
-
-    //        // Map the constant buffer (keep it mapped for the lifetime)
-    //        hr = m_constantBuffer->Map(0, nullptr, reinterpret_cast<void**>(&m_mappedData));
-    //        return SUCCEEDED(hr);
-    //    }
-
-    //    void UpdateConstants(const ShadowMapConstants& constants)
-    //    {
-    //        memcpy(m_mappedData, &constants, sizeof(ShadowMapConstants));
-    //    }
-
-    //    D3D12_GPU_VIRTUAL_ADDRESS GetGPUAddress() const
-    //    {
-    //        return m_constantBuffer->GetGPUVirtualAddress();
-    //    }
-    //};
-
-
     class CubeMapShadowMap
     {
     private:
-        float m_farPlane = 100.0f;
+        float m_farPlane = 500.0f;
         ComPtr<ID3D12Resource> m_cubeMapTexture;
         ComPtr<ID3D12Resource> m_depthBuffer;
 
@@ -107,7 +54,7 @@ namespace transforms {
         bool Initialize(ID3D12Device* device,
             RtvDsvDescriptorHeapManager* descriptorManager,
             SharedDescriptorHeapV2* srvHeapManager,
-            UINT resolution = 1024,
+            UINT resolution = SHADOW_MAP_SIZE,
             DXGI_FORMAT colorFormat = DXGI_FORMAT_R32G32B32A32_FLOAT,
             DXGI_FORMAT depthFormat = DXGI_FORMAT_D32_FLOAT);
         // Get handles for rendering

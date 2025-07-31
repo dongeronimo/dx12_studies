@@ -5,7 +5,7 @@ struct VS_OUTPUT
     float depth : DEPTH; // Linear depth for variance shadow mapping
     float3 worldPos : WORLD_POS; // World position (optional, for debugging)
 };
-
+static const float C_EVSM = 50.0f;
 // Pixel Shader for Variance Shadow Mapping
 float4 main(VS_OUTPUT input) : SV_Target
 {
@@ -14,9 +14,9 @@ float4 main(VS_OUTPUT input) : SV_Target
     // G: mean squared depth (second moment)  
     // B: unused (could store additional data)
     // A: unused
+    float warpedDepth = exp(C_EVSM * input.depth + 0.001);
+
+    float depthSquared = warpedDepth * warpedDepth;
     
-    float depth = input.depth;
-    float depthSquared = depth * depth;
-    
-    return float4(depth, depthSquared, 0.0f, 1.0f);
+    return float4(warpedDepth, depthSquared, 0.0f, 1.0f);
 }

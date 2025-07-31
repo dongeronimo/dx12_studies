@@ -1,4 +1,3 @@
-// Input/Output structures
 struct VS_OUTPUT
 {
     float4 position : SV_POSITION;
@@ -58,8 +57,8 @@ struct PointLightsDataStruct
 StructuredBuffer<PerObjectDataStruct> PerObjectData : register(t0);
 StructuredBuffer<PerFrameDataStruct> PerFrameData : register(t1);
 StructuredBuffer<PointLightsDataStruct> PointLights : register(t2);
-
-TextureCubeArray ShadowMaps : register(t3); // Array of cube maps (one per light)
+static const int MAX_LIGHTS = 16;
+TextureCube ShadowMaps[MAX_LIGHTS] : register(t3); // Array of cube maps (one per light)
 SamplerState ShadowSampler : register(s0); // Sampler for shadow maps
 
 // Root constant containing the index to access current object data
@@ -70,35 +69,49 @@ cbuffer RootConstants : register(b0)
 
 // Physical constants for BRDF calculations
 static const float PI = 3.14159265359f;
-static const float MIN_ROUGHNESS = 0.04f; // Minimum roughness to prevent numerical issues
-static const float EPSILON = 0.001f; // Small value to prevent division by zero
+static const float MIN_ROUGHNESS = 0.004f; // Minimum roughness to prevent numerical issues
+static const float EPSILON = 0.0001f; // Small value to prevent division by zero
+static const float C_EVSM = 50.0f;
 
+// FIXED: Only the shadow function to prevent light leaking
 float CalculateVarianceShadow(float3 worldPos, PointLightsDataStruct light, int lightIndex)
 {
     // Calculate vector from fragment to light
     float3 fragToLight = worldPos - light.position.xyz;
     float currentDepth = length(fragToLight) / light.shadowFarPlane; // Normalize to [0,1]
     
+    // FIXED: Add minimal depth bias to reduce light leaking
+    float depthBias = 0.00005f; // Much smaller bias
+    currentDepth += depthBias;
+    
+    // FIXED: Clamp exponential to prevent overflow but allow higher values
+    float warpedCurrentDepth = exp(min(C_EVSM * currentDepth, 100.0f));
+
     // Sample the cube map using the direction vector
-    float4 shadowData = ShadowMaps.Sample(ShadowSampler, float4(fragToLight, (float) lightIndex));
+    float4 shadowData = ShadowMaps[lightIndex].Sample(ShadowSampler, fragToLight);
     
     // Extract variance shadow map data
     float storedDepth = shadowData.r; // First moment (mean)
     float storedDepthSquared = shadowData.g; // Second moment (mean squared)
     
     // Basic shadow test
-    if (currentDepth <= storedDepth)
+    if (warpedCurrentDepth <= storedDepth)
         return 1.0; // Not in shadow
     
     // Variance shadow mapping calculation
     float variance = storedDepthSquared - (storedDepth * storedDepth);
-    variance = max(variance, 0.0001); // Avoid division by zero
+    variance = max(variance, 0.00002); // Avoid division by zero
     
-    float d = currentDepth - storedDepth;
+    float d = warpedCurrentDepth - storedDepth;
     float pMax = variance / (variance + d * d);
     
-    return pMax;
+    // FIXED: Very minimal light bleeding reduction to prevent leaking through thin walls
+    float lightBleedingReduction = 0.05f; // Much smaller reduction
+    pMax = saturate((pMax - lightBleedingReduction) / (1.0f - lightBleedingReduction));
+    
+    return saturate(pMax);
 }
+
 /**
  * Calculates Fresnel reflectance using Schlick's approximation
  * @param cosTheta: Cosine of angle between view direction and half vector
@@ -264,6 +277,7 @@ float3 ApplyReinhardExtendedToneMapping(float3 hdrColor, float exposure)
     float3 numerator = exposedColor * (1.0f + (exposedColor / (whitePoint * whitePoint)));
     return numerator / (1.0f + exposedColor);
 }
+
 /**
  * Main pixel shader entry point
  * Implements Principled BSDF shading with multiple point lights
@@ -289,9 +303,11 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     float3 finalColor = float3(0.0f, 0.0f, 0.0f);
     
     // Process all point lights in the scene
-    for (int lightIndex = 0; lightIndex < frameData.numberOfPointLights; lightIndex++)
+    PointLightsDataStruct currentLight = PointLights[0];
+    int lightIndex = 0;
+    for (lightIndex = 0; lightIndex < MAX_LIGHTS; lightIndex++)
     {
-        PointLightsDataStruct currentLight = PointLights[lightIndex];
+        currentLight = PointLights[lightIndex];
         
         // Calculate light direction and distance
         float3 lightWorldPos = currentLight.position.xyz;
@@ -314,17 +330,9 @@ float4 main(VS_OUTPUT input) : SV_TARGET
         // Combine diffuse and specular light colors (assuming they're the same for simplicity)
         float3 lightColor = currentLight.ColorDiffuse.rgb;
         float lightIntensity = currentLight.ColorDiffuse.a;
-        
         // Accumulate light contribution with attenuation
-        finalColor += brdfValue * lightColor * lightIntensity * attenuation * shadowFactor;
-        
-        //// Add ambient contribution (only once, not per light)
-        //if (lightIndex == 0)
-        //{
-        //    float3 ambientColor = currentLight.ColorAmbient.rgb;
-        //    float ambientIntensity = currentLight.ColorAmbient.a;
-        //    finalColor += albedo * ambientColor * ambientIntensity;
-        //}
+        if (lightIndex < frameData.numberOfPointLights)
+            finalColor += brdfValue * lightColor * lightIntensity * attenuation * shadowFactor;
     }
     
     // Add emissive contribution (self-illumination)
